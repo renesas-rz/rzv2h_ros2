@@ -1,0 +1,3 @@
+xhost +SI:localuser:$USER >/dev/null
+unset WAYLAND_DISPLAY
+export XDG_SESSION_TYPE=x11

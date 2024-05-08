@@ -1,0 +1,7 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 100644
+index 0000000..f32ff60
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1 @@
++add_subdirectory(darknet_ros_msgs)

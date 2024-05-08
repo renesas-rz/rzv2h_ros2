@@ -1,0 +1,211 @@
+FROM arm64v8/ubuntu:22.04 AS base_env
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Tokyo
+ENV DISPLAY=:100
+ENV WAYLAND_DISPLAY_NAME=x11
+ENV HOME=/root
+ENV XDG_RUNTIME_DIR=/tmp/runtime-root
+
+# Make xdg runtime dir
+RUN mkdir -p $XDG_RUNTIME_DIR && \
+    chmod 700 $XDG_RUNTIME_DIR
+
+# Install packages
+RUN apt-get clean && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    sudo \
+    vim \
+    nano \
+    locales \
+    net-tools \
+    git \
+    wget \
+    curl \
+    build-essential \
+    cmake
+
+# Language preferences
+RUN locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+# Add Ubuntu Universe amd Gazebo repository and keys
+RUN apt-get update && \
+    apt-get install -y \
+    software-properties-common && \
+    add-apt-repository universe && \
+    /bin/sh -c 'curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg' && \
+    /bin/sh -c 'echo "deb [arch=arm64 signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" >> /etc/apt/sources.list.d/ros2.list'
+
+# Install ROS packages
+RUN apt-get update && \
+    apt-get install -y \
+    ros-humble-desktop \
+    ros-dev-tools \
+    ros-humble-rmw-cyclonedds-cpp
+
+# Update rosdep
+RUN /bin/bash -c "source /opt/ros/humble/setup.sh && rosdep init && rosdep update"
+
+# Install packages that Gazebo depends on
+RUN apt-get update && \
+    apt-get install -y \
+    ignition-fortress \
+    libsdformat9-dev \
+    libqwt-qt5-dev \
+    libfreeimage-dev \
+    libtar-dev \
+    libtbb-dev \
+    libignition-msgs5-dev \
+    libignition-transport8-dev \
+    libignition-common3-dev \
+    libignition-fuel-tools4-dev
+    
+FROM base_env AS build_env
+
+# Build and install librealsense2 packages
+RUN git clone https://github.com/IntelRealSense/librealsense2-release.git -b release/humble/librealsense2 /tmp/librealsense2 && \
+    mkdir /tmp/librealsense2/build
+WORKDIR /tmp/librealsense2/build
+RUN cmake -DFORCE_RSUSB_BACKEND=true -DCMAKE_BUILD_TYPE=release ../ && \
+    make -j4
+RUN make install DESTDIR=$HOME/install
+
+# Get the source code of Gazebo11
+RUN git clone https://github.com/osrf/gazebo -b gazebo11_11.10.2 /tmp/gazebo && \
+    mkdir /tmp/gazebo/build
+WORKDIR /tmp/gazebo/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release ../ && \
+    make -j4
+RUN make install DESTDIR=$HOME/install
+
+FROM base_env AS runtime_env
+
+# Copy install directory
+COPY --from=build_env $HOME/install $HOME
+
+ENV LD_LIBRARY_PATH=$HOME/usr/local/lib:$LD_LIBRARY_PATH
+ENV PATH=$HOME/usr/local/bin:$PATH
+ENV PKG_CONFIG_PATH=$HOME/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+
+# Install v4l camera packages
+RUN apt-get install -y \
+    ros-humble-v4l2-camera
+
+# Install packages that realsense-ros depends on
+RUN apt-get install -y \
+    ros-humble-diagnostic-updater
+
+# Build realsense-ros packages
+RUN git clone https://github.com/IntelRealSense/realsense-ros.git -b 4.54.1 $HOME/ws_realsense/src/realsense-ros
+WORKDIR $HOME/ws_realsense
+RUN /bin/bash -c "source /opt/ros/humble/setup.sh && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --parallel-workers 1"
+
+# Install packages that gazebo_ros2_control depends on
+RUN apt-get update && \
+    apt-get install -y \
+    ros-humble-controller-manager
+
+# Build the packages for linking Gazebo and ROS2
+RUN git clone https://github.com/ros-simulation/gazebo_ros_pkgs.git -b ros2 $HOME/ws_gazebo_ros/src/gazebo_ros_pkgs && \
+    git clone https://github.com/ros-controls/gazebo_ros2_control.git -b humble $HOME/ws_gazebo_ros/src/gazebo_ros2_control
+WORKDIR $HOME/ws_gazebo_ros
+RUN /bin/bash -c "source /opt/ros/humble/setup.sh && MAKEFLAGS=-j4 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --parallel-workers 1"
+
+# Install TurtleBot3 packages
+RUN apt-get update && \
+    apt-get install -y \
+    ros-humble-cartographer \
+    ros-humble-cartographer-ros \
+    ros-humble-navigation2 \
+    ros-humble-nav2-bringup \
+    ros-humble-turtlebot3
+
+# Build TurtleBot3 simulation packages
+RUN git clone https://github.com/ROBOTIS-GIT/turtlebot3_simulations.git -b humble-devel $HOME/ws_turtlebot3/src/turtlebot3_simulations
+WORKDIR $HOME/ws_turtlebot3
+RUN /bin/bash -c "source /opt/ros/humble/setup.sh && source $HOME/ws_gazebo_ros/install/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --parallel-workers 1"
+
+# Install colcon-mixin to build MoveIt2
+RUN apt-get install -y \
+    python3-colcon-common-extensions \
+    python3-colcon-mixin && \
+    colcon mixin add default https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml && \
+    colcon mixin update default
+
+# Get the source code of MoveIt2 tutorials
+RUN git clone https://github.com/ros-planning/moveit2_tutorials -b humble $HOME/ws_moveit2/src/moveit2_tutorials
+WORKDIR $HOME/ws_moveit2/src
+RUN vcs import < moveit2_tutorials/moveit2_tutorials.repos
+
+# Install packages that MoveIt2 depends on
+RUN /bin/bash -c "sudo apt update && source $HOME/ws_gazebo_ros/install/setup.bash && rosdep install -r --from-paths . --ignore-src --rosdistro humble -y"
+
+# Build MoveIt2 tutorials packages
+WORKDIR $HOME/ws_moveit2
+RUN /bin/bash -c "source /opt/ros/humble/setup.sh && source $HOME/ws_gazebo_ros/install/setup.bash && colcon build --mixin release --symlink-install --parallel-workers 1"
+
+# Get gazebo data in advance
+RUN wget http://brain.cc.kogakuin.ac.jp/~kanamaru/lecture/ROS/download_models.sh && \
+    /bin/bash download_models.sh && \
+    rm download_models.sh
+
+# Get data for Ignition Fortress
+RUN git clone https://github.com/gazebosim/docs.git $HOME/ignition_gazebo
+
+# Apply a patch for Turtlebot3_navigation2 to display the map
+WORKDIR /
+COPY files/turtlebot3_navigation2_fix_map_load.patch /
+RUN patch -p0 < turtlebot3_navigation2_fix_map_load.patch && \
+    rm turtlebot3_navigation2_fix_map_load.patch
+
+# Install packages for xwayland display
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    dbus-x11 \
+    libxv1 \
+    mesa-utils \
+    mesa-utils-extra \
+    psmisc \
+    procps \
+    xauth \
+    xinit \
+    x11-xserver-utils \
+    xwayland
+
+# Install weston packages
+RUN apt-get install -y \
+    weston \
+    dmz-cursor-theme
+
+# Install xterm and window manager packages
+RUN apt-get install -y \
+    xterm \
+    jwm \
+    wm2 \ 
+    9wm
+
+RUN rm -rf /var/lib/apt/lists/*
+
+# Copy init scripts
+ENV X11_INIT_SCRIPT_DIR=/x11_init
+RUN mkdir $X11_INIT_SCRIPT_DIR
+COPY files/xinitrc_orig $X11_INIT_SCRIPT_DIR
+COPY files/weston_x11.ini $X11_INIT_SCRIPT_DIR
+COPY files/weston_xwayland.ini $X11_INIT_SCRIPT_DIR
+COPY files/x11_window /usr/local/bin
+RUN chmod +x /usr/local/bin/x11_window && \
+    mkdir -p /tmp/.X11-unix/
+
+# Setting .bashrc
+RUN echo '\n\
+export GAZEBO_RESOURCE_PATH=$HOME/usr/local/share/gazebo-11\n\
+source /opt/ros/humble/setup.bash\n\
+source /root/ws_gazebo_ros/install/setup.bash\n\
+source /root/ws_turtlebot3/install/setup.bash\n\
+source /root/ws_moveit2/install/setup.bash\n\
+source /root/ws_realsense/install/setup.bash\n\
+' >> $HOME/.bashrc

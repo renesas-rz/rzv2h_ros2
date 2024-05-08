@@ -1,0 +1,31 @@
+#! /bin/bash
+if [ $# == 0 ]; then
+  bash &
+  weston -c $X11_INIT_SCRIPT_DIR/weston_xwayland.ini --socket=$WAYLAND_DISPLAY_NAME
+else
+  cp $X11_INIT_SCRIPT_DIR/xinitrc_orig $X11_INIT_SCRIPT_DIR/xinitrc
+  echo "exec \"${@:1}\"" >> $X11_INIT_SCRIPT_DIR/xinitrc
+  bash &
+  weston -c $X11_INIT_SCRIPT_DIR/weston_x11.ini --socket=$WAYLAND_DISPLAY_NAME &
+  export DISPLAY=$DISPLAY
+  export WAYLAND_DISPLAY=$WAYLAND_DISPLAY_NAME
+  export XAUTHORITY="$HOME/.Xauthority"
+  touch $XAUTHORITY
+  ps=`ps aux | grep weston-desktop-shell | grep -v grep | wc -l`
+  for i in `seq 1 30`
+  do
+    echo "[${i}] ps=${ps}"
+    if [ "$ps" != 0 ]; then
+      xauth add $DISPLAY . COOKIE
+      exec xinit $X11_INIT_SCRIPT_DIR/xinitrc -- /usr/bin/Xwayland $DISPLAY -br
+      break
+    else
+      echo wait for wayland display named $WAYLAND_DISPLAY_NAME.
+      sleep 1
+      ps=`ps aux | grep weston-desktop-shell | grep -v grep | wc -l`
+    fi
+  done
+  if [ "$ps" == 0 ]; then
+    echo can not open wayland display named $WAYLAND_DISPLAY_NAME.
+  fi
+fi

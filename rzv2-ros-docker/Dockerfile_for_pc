@@ -1,0 +1,111 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Tokyo
+ENV HOME=/root
+ENV XDG_RUNTIME_DIR=/tmp/runtime-root
+
+# Make xdg runtime dir
+RUN mkdir -p $XDG_RUNTIME_DIR && \
+    chmod 700 $XDG_RUNTIME_DIR
+
+# Install packages
+RUN apt-get clean && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    sudo \
+    vim \
+    nano \
+    locales \
+    net-tools \
+    git \
+    wget \
+    curl \
+    build-essential
+
+# Language preferences
+RUN locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+# Add Ubuntu Universe repository and keys
+RUN apt-get update && \
+    apt-get install -y \
+    software-properties-common
+RUN add-apt-repository universe
+RUN /bin/sh -c 'curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg'
+RUN /bin/sh -c 'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" >> /etc/apt/sources.list.d/ros2.list'
+
+# Install ROS packages
+RUN apt-get update && \
+    apt-get install -y \
+    ros-humble-desktop \
+    ros-dev-tools \
+    ros-humble-rmw-cyclonedds-cpp
+
+# Update rosdep
+RUN /bin/bash -c "source /opt/ros/humble/setup.sh && rosdep init && rosdep update"
+
+# Install camera packages
+RUN apt-get install -y \
+    ros-humble-realsense2-camera \
+    ros-humble-v4l2-camera
+
+# Install Ignition Fortress and Gazebo packages
+RUN apt-get update && \
+    apt-get install -y \
+    ignition-fortress \
+    gazebo
+
+# Install TurtleBot3 packages
+RUN apt-get update && \
+    apt-get install -y \
+    ros-humble-gazebo-* \
+    ros-humble-cartographer \
+    ros-humble-cartographer-ros \
+    ros-humble-navigation2 \
+    ros-humble-nav2-bringup \
+    ros-humble-turtlebot3 \
+    ros-humble-turtlebot3-simulations
+
+# Install colcon-mixin to build MoveIt2
+RUN apt-get install -y \
+    python3-colcon-common-extensions \
+    python3-colcon-mixin
+RUN colcon mixin add default https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml
+RUN colcon mixin update default
+
+# Get the source code of MoveIt2 tutorials
+RUN mkdir -p $HOME/ws_moveit2/src
+WORKDIR $HOME/ws_moveit2/src
+RUN git clone https://github.com/ros-planning/moveit2_tutorials -b humble
+RUN vcs import < moveit2_tutorials/moveit2_tutorials.repos
+
+# Install packages that MoveIt2 depends on
+RUN /bin/bash -c "sudo apt update && rosdep install -r --from-paths . --ignore-src --rosdistro humble -y"
+
+# Build MoveIt2 tutorials packages
+WORKDIR $HOME/ws_moveit2
+RUN /bin/bash -c "source /opt/ros/humble/setup.sh && colcon build --mixin release --symlink-install"
+
+# Get gazebo data in advance
+RUN wget http://brain.cc.kogakuin.ac.jp/~kanamaru/lecture/ROS/download_models.sh
+RUN /bin/bash download_models.sh
+RUN rm download_models.sh
+
+# Get data for Ignition Fortress
+RUN git clone https://github.com/gazebosim/docs.git $HOME/ignition_gazebo
+
+# Apply a patch for Turtlebot3_navigation2 to display the map
+WORKDIR /
+COPY files/turtlebot3_navigation2_fix_map_load.patch /
+RUN patch -p0 < turtlebot3_navigation2_fix_map_load.patch
+RUN rm turtlebot3_navigation2_fix_map_load.patch
+
+RUN rm -rf /var/lib/apt/lists/*
+
+RUN echo '\n\
+source /opt/ros/humble/setup.bash\n\
+source /root/ws_moveit2/install/setup.bash\n\
+' >> $HOME/.bashrc
