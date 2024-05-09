@@ -87970,7 +87970,7 @@ new file mode 100644
 index 0000000..966d850
 --- /dev/null
 +++ b/darknet_drp_ros/src/MeraDrpRuntimeWrapper.cpp
-@@ -0,0 +1,246 @@
+@@ -0,0 +1,230 @@
 +/*
 + * Original Code (C) Copyright Edgecortix, Inc. 2022
 + * Modified Code (C) Copyright Renesas Electronics Corporation 2024　
@@ -88003,17 +88003,13 @@ index 0000000..966d850
 +#include <dirent.h>
 +#include "MeraDrpRuntimeWrapper.h"
 +
-+/* [modify] start */
 +#include "rclcpp/rclcpp.hpp"
-+/* [modify] end */
 +
 +template <typename T>
 +static std::vector<T> LoadBinary(const std::string& bin_file) {
 +  std::ifstream file(bin_file.c_str(), std::ios::in | std::ios::binary);
 +  if (!file.is_open()) {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "unable to open file %s", bin_file.c_str());
-+        /* [modify] end */
 +  }
 +
 +  file.seekg(0, file.end);
@@ -88024,9 +88020,7 @@ index 0000000..966d850
 +  file.read(file_buffer.get(), file_size);
 +
 +  if (file.bad() || file.fail()) {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "error occured while reading the file");
-+        /* [modify] end */
 +  }
 +
 +  file.close();
@@ -88051,9 +88045,7 @@ index 0000000..966d850
 +}
 +
 +bool MeraDrpRuntimeWrapper::LoadModel(const std::string& model_dir, uint64_t start_address = 0x00) {
-+    /* [modify] start */
 +    RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "Loading json data...");
-+    /* [modify] end */
 +    const std::string json_file(model_dir + "/deploy.json");
 +    std::ifstream json_in(json_file.c_str(), std::ios::in);
 +    std::string json_data((std::istreambuf_iterator<char>(json_in)), std::istreambuf_iterator<char>());
@@ -88071,16 +88063,12 @@ index 0000000..966d850
 +    }
 +    #endif
 +
-+    /* [modify] start */
 +    RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "Loading runtime module...");
-+    /* [modify] end */
 +    tvm::runtime::Module mod_syslib = tvm::runtime::Module::LoadFromFile(model_dir + "/deploy.so");
 +    mod = (*tvm::runtime::Registry::Get("tvm.graph_executor_debug.create"))(
 +      json_data, mod_syslib, device_type, device_id);
 +
-+    /* [modify] start */
 +    RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "Loading parameters...");
-+    /* [modify] end */
 +    tvm::runtime::PackedFunc load_params = mod.GetFunction("load_params");
 +    auto params_data = LoadBinary<char>(model_dir + "/deploy.params");
 +    TVMByteArray params_arr;
@@ -88096,9 +88084,7 @@ index 0000000..966d850
 +
 +template <typename T>
 +void MeraDrpRuntimeWrapper::SetInput(int input_index, const T* data_ptr) {
-+    /* [modify] start */
 +    RCLCPP_DEBUG(rclcpp::get_logger("darknet_drp_ros"), "Loading input...");
-+    /* [modify] end */
 +
 +    tvm::runtime::PackedFunc get_input = mod.GetFunction("get_input");
 +    tvm::runtime::NDArray xx = get_input(input_index);
@@ -88177,9 +88163,7 @@ index 0000000..966d850
 +      }
 +      closedir(dir);
 +    } else {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "Can not open model dir : %s", model_dir.c_str());
-+        /* [modify] end */
 +    }
 +
 +    return num_input;
@@ -88761,7 +88745,7 @@ new file mode 100644
 index 0000000..c710fa2
 --- /dev/null
 +++ b/darknet_drp_ros/src/PreRuntimeV2H.cpp
-@@ -0,0 +1,967 @@
+@@ -0,0 +1,869 @@
 +/*
 + * Original Code (C) Copyright Renesas Electronics Corporation 2024
 + *　
@@ -88797,9 +88781,7 @@ index 0000000..c710fa2
 +#include <dirent.h>
 +#include "PreRuntime.h"
 +
-+/* [modify] start */
 +#include "rclcpp/rclcpp.hpp"
-+/* [modify] end */
 +
 +PreRuntime::PreRuntime()
 +{
@@ -88818,10 +88800,8 @@ index 0000000..c710fa2
 +        errno = 0;
 +        if (PRE_SUCCESS != close(drpai_obj_info.drpai_fd ))
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +                "[ERROR] Failed to close DRP-AI Driver : errno=%d", errno);
-+            /* [modify] end */
 +        }
 +    }
 +}
@@ -88856,10 +88836,8 @@ index 0000000..c710fa2
 +    std::ifstream ifs(addr_file);
 +    if (ifs.fail())
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to open Address Map List %s: errno=%d", addr_file.c_str(), errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -88956,20 +88934,16 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&config_data, fname, drpai_obj_info.drpai_address.drp_config_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to read file %s/drp_config.mem", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    /*Load weight data to memory using non-dynamic function.*/
 +    ret = LoadDataToMem(&config_data, drpai_obj_info.drpai_address.drp_config_addr + drpai_obj_info.data_inout.start_address, drpai_obj_info.drpai_address.drp_config_size);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write file data %s/drp_config.mem", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -88978,20 +88952,16 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&aimac_desc_data, dir+"/aimac_desc.bin", drpai_obj_info.drpai_address.desc_aimac_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to read file %s/aimac_desc.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    /*Load weight data to memory using non-dynamic function.*/
 +    ret = LoadDataToMem(&aimac_desc_data, drpai_obj_info.drpai_address.desc_aimac_addr + drpai_obj_info.data_inout.start_address, drpai_obj_info.drpai_address.desc_aimac_size);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write file data %s/aimac_desc.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -88999,18 +88969,14 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&drp_desc_data, dir+"/drp_desc.bin", drpai_obj_info.drpai_address.desc_drp_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to read file %s/drp_desc.bin", dir.c_str());
-+        /* [modify] end */
 +       return PRE_ERROR;
 +    }
 +    ret = LoadDataToMem(&drp_desc_data, drpai_obj_info.drpai_address.desc_drp_addr + drpai_obj_info.data_inout.start_address, drpai_obj_info.drpai_address.desc_drp_size);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write file data %s/drp_desc.bin", dir.c_str());
-+        /* [modify] end */
 +       return PRE_ERROR;
 +    }
 +       
@@ -89019,19 +88985,15 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&drp_param_data, dir+"/drp_param.bin", drpai_obj_info.drpai_address.drp_param_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to read file %s/drp_param.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    ret = LoadDataToMem(&drp_param_data, drpai_obj_info.drpai_address.drp_param_addr + drpai_obj_info.data_inout.start_address, drpai_obj_info.drpai_address.drp_param_size);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write file data %s/drp_param.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89039,18 +89001,14 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&weight_data, dir+"/weight.bin", drpai_obj_info.drpai_address.weight_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to read file %s/weight.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    ret = LoadDataToMem(&weight_data, drpai_obj_info.drpai_address.weight_addr + drpai_obj_info.data_inout.start_address, drpai_obj_info.drpai_address.weight_size);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write file data %s/weight.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89058,19 +89016,15 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&aimac_param_cmd_data, dir+"/aimac_param_cmd.bin", drpai_obj_info.drpai_address.aimac_param_cmd_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to read file %s/aimac_param_cmd.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    ret = LoadDataToMem(&aimac_param_cmd_data, drpai_obj_info.drpai_address.aimac_param_cmd_addr + drpai_obj_info.data_inout.start_address, drpai_obj_info.drpai_address.aimac_param_cmd_size);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write file data %s/aimac_param_cmd.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89078,19 +89032,15 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&aimac_param_desc_data, dir+"/aimac_param_desc.bin", drpai_obj_info.drpai_address.aimac_param_desc_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to read file %s/aimac_param_desc.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    ret = LoadDataToMem(&aimac_param_desc_data, drpai_obj_info.drpai_address.aimac_param_desc_addr + drpai_obj_info.data_inout.start_address, drpai_obj_info.drpai_address.aimac_param_desc_size);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write file data %s/aimac_param_desc.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 + 
@@ -89098,19 +89048,15 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&aimac_cmd_data, dir+"/aimac_cmd.bin", drpai_obj_info.drpai_address.aimac_cmd_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to read file %s/aimac_cmd.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    ret = LoadDataToMem(&aimac_cmd_data, drpai_obj_info.drpai_address.aimac_cmd_addr + drpai_obj_info.data_inout.start_address, drpai_obj_info.drpai_address.aimac_cmd_size);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write file data %s/aimac_cmd.bin", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89138,18 +89084,14 @@ index 0000000..c710fa2
 +    ret = ioctl(drpai_fd, DRPAI_ASSIGN, &drpai_data);
 +    if ( -1 == ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to run DRPAI_ASSIGN : errno=%d", errno);
-+        /*} [modify] end */
 +        return PRE_ERROR;
 +    }
 +    ret = write(drpai_fd, data->data(), size);
 +    if ( -1 == ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write with DRPAI_ASSIGN : errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89174,9 +89116,7 @@ index 0000000..c710fa2
 +    std::ifstream ifs(file);
 +    if (!ifs)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to open %s: errno=%d", file.c_str(), errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89190,9 +89130,7 @@ index 0000000..c710fa2
 +    /* Check the param_data size is appropriate */
 +    if (size != data->size())
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to read %s: errno=%d", file.c_str(), errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    ifs.close();
@@ -89236,10 +89174,8 @@ index 0000000..c710fa2
 +    
 +    if (0 != ioctl(drpai_fd, DRPAI_ASSIGN_PARAM, &drpai_param))
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to run DRPAI_ASSIGN_PARAM : errno=%d %s %d", errno, __FILE__, __LINE__);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    
@@ -89249,19 +89185,15 @@ index 0000000..c710fa2
 +    ret = ReadFileData(&param_info_data, info_file, drp_param_info_size);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to read file %s", info_file.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    uint8_t param_info_array[param_info_data.size()];
 +    std::copy(param_info_data.begin(),param_info_data.end(),param_info_array);
 +    if ( 0 > write(drpai_fd, param_info_array, drp_param_info_size))
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), 
 +            "[ERROR] Failed to write PARAM_INFO to DRP-AI Driver : errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    return PRE_SUCCESS;
@@ -89285,16 +89217,12 @@ index 0000000..c710fa2
 +    }
 +    if ((drpai_data.address > addr)|| drpai_mem_addr_end < addr ) 
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Not in DRP-AI memory area.");
-+        /* [modify] end */
 +        return INVALID_ADDR;
 +    }
 +    if (0 != (addr % 64))
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Not 64-byte aligned.");
-+        /* [modify] end */
 +        return INVALID_ADDR;
 +    }
 +    return addr;
@@ -89334,9 +89262,7 @@ index 0000000..c710fa2
 +    /* Check whether directory exists*/
 +    if (0 != stat(dir.c_str(),&statBuf))
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Directory %s not found", dir.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89354,9 +89280,7 @@ index 0000000..c710fa2
 +    drpai_obj_info.drpai_fd = open("/dev/drpai0", O_RDWR);
 +    if (PRE_SUCCESS > drpai_obj_info.drpai_fd )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to open DRP-AI Driver : errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89364,10 +89288,8 @@ index 0000000..c710fa2
 +    ret = ioctl(drpai_obj_info.drpai_fd , DRPAI_GET_DRPAI_AREA, &drpai_data0);
 +    if (-1 == ret)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to get DRP-AI Memory Area : errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89375,10 +89297,8 @@ index 0000000..c710fa2
 +    ret = ReadAddrmapTxt(address_file);
 +    if (PRE_SUCCESS < ret)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to read Address Map List %s", address_file.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89403,10 +89323,8 @@ index 0000000..c710fa2
 +    drpai_adrconv.mode         = DRPAI_ADRCONV_MODE_REPLACE;
 +    if ( PRE_SUCCESS != ioctl(drpai_obj_info.drpai_fd , DRPAI_SET_ADRCONV, &drpai_adrconv))
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to run DRPAI_SET_ADRCONV : errno=%d", errno);
-+        /* [modify] end */
 +       return PRE_ERROR;
 +    }
 +
@@ -89418,10 +89336,8 @@ index 0000000..c710fa2
 +    ret = ParseParamInfo(drpai_param_file);
 +    if ( PRE_SUCCESS < ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to read param info file: %s", drpai_param_file.c_str());
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    
@@ -89429,9 +89345,7 @@ index 0000000..c710fa2
 +    ret = WritePrerunData(dir);
 +    if ( PRE_SUCCESS != ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to write parameters. ");
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89464,9 +89378,7 @@ index 0000000..c710fa2
 +
 +    if(internal_buffer == NULL)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to malloc PreRuntime internal buffer.");
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    internal_buffer_size = (uint32_t) (drpai_data.size);
@@ -89476,9 +89388,7 @@ index 0000000..c710fa2
 +    ret = ioctl(drpai_obj_info.drpai_fd , DRPAI_ASSIGN, &drpai_data);
 +    if (-1 == ret)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to run DRPAI_ASSIGN: errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89487,10 +89397,8 @@ index 0000000..c710fa2
 +    ret = read(drpai_obj_info.drpai_fd , internal_buffer, drpai_data.size);
 +    if ( -1 == ret )
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to read via DRP-AI Driver: errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89516,19 +89424,15 @@ index 0000000..c710fa2
 +    ret = ioctl(drpai_obj_info.drpai_fd , DRPAI_ASSIGN, &input);
 +    if (-1 == ret)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to run DRPAI_ASSIGN in SetInput(): errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    ret = write(drpai_obj_info.drpai_fd , indata, input.size);
 +    if (-1 == ret)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to write via DRP-AI Driver in SetInput(): errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89573,10 +89477,8 @@ index 0000000..c710fa2
 +            ret = ioctl(drpai_obj_info.drpai_fd, DRPAI_SET_ADRCONV, &drpai_adrconv);
 +            if (0 != ret)
 +            {
-+                /* [modify] start */
 +                RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +                    "[ERROR] Failed to run SET_ADRCONV(1) for DRP-AI input image : errno=%d", errno);
-+                /* [modify] end */
 +                return PRE_ERROR;
 +            }
 +
@@ -89589,10 +89491,8 @@ index 0000000..c710fa2
 +    
 +            if (0 != ret)
 +            {
-+                /* [modify] start */
 +                RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +                    "[ERROR] Failed to run SET_ADRCONV(2) for DRP-AI input image : errno=%d", errno);
-+                /* [modify] end */
 +                return PRE_ERROR;
 +            }
 +        }
@@ -89652,9 +89552,7 @@ index 0000000..c710fa2
 +    errno = 0;
 +    if ( PRE_SUCCESS != ioctl(drpai_obj_info.drpai_fd , DRPAI_START, &proc[0]))
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to run DRPAI_START : errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89668,17 +89566,13 @@ index 0000000..c710fa2
 +
 +    if(0 == ret_drpai)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] DRP-AI timed out : errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +    else if (-1 == ret_drpai)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +            "[ERROR] Failed to run DRP-AI Driver pselect : errno=%d", errno);
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +
@@ -89688,10 +89582,8 @@ index 0000000..c710fa2
 +        ret_drpai = ioctl(drpai_obj_info.drpai_fd, DRPAI_GET_STATUS, &drpai_status);
 +        if (-1 == ret_drpai)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +                "[ERROR] Failed to run DRPAI_GET_STATUS : errno=%d", errno);
-+            /* [modify] end */
 +            return PRE_ERROR;
 +        }
 +
@@ -89700,10 +89592,8 @@ index 0000000..c710fa2
 +    /*Stop Timer */
 +    timespec_get(&ts_end, TIME_UTC);
 +    preproc_time = timedifference_msec(ts_start, ts_end);
-+    /* [modify] start */
 +    RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"),
 +        "[TIME] PreRuntime DRP-AI processing time : %.2f msec", preproc_time);
-+    /* [modify] end */
 +
 +    timespec_get(&ts_start, TIME_UTC);
 +#endif
@@ -89711,17 +89601,13 @@ index 0000000..c710fa2
 +    ret = GetResult(proc[DRPAI_INDEX_OUTPUT].address, proc[DRPAI_INDEX_OUTPUT].size);
 +    if (PRE_SUCCESS < ret)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[ERROR] Failed to get result.");
-+        /* [modify] end */
 +        return PRE_ERROR;
 +    }
 +#ifdef DEBUG_LOG
 +    timespec_get(&ts_end, TIME_UTC);
 +    diff = timedifference_msec(ts_start, ts_end);
-+    /* [modify] start */
 +    RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "[TIME] GetResult() Processing Time : %.2f msec", diff);
-+    /* [modify] end */
 +#endif
 +
 +    *out_ptr = internal_buffer;
@@ -90088,7 +89974,7 @@ new file mode 100644
 index 0000000..bc158f3
 --- /dev/null
 +++ b/darknet_drp_ros/src/define.h
-@@ -0,0 +1,246 @@
+@@ -0,0 +1,240 @@
 +/***********************************************************************************************************************
 +* Copyright (C) 2024 Renesas Electronics Corporation. All rights reserved.
 +***********************************************************************************************************************/
@@ -90138,9 +90024,7 @@ index 0000000..bc158f3
 +//#define DEBUG_TIME_FLG
 +
 +/*Display AI frame rate*/
-+/* [modify] start */
 +#define DISP_AI_FRAME_RATE
-+/* [modify] end */
 +
 +/* Padding input mode to maintain the aspect ratio of DRP-AI input image.
 +   This mode requires the DRP-AI object file having the squared input size CAM_IMAGE_WIDTH x CAM_IMAGE_WIDTH.
@@ -90211,9 +90095,7 @@ index 0000000..bc158f3
 +/* Calculation Formula:                  */
 +/*     1260MHz /(DRP_MAX_FREQ + 1)       */
 +
-+/* [modify] start */
 +#define DRPAI_FREQ                  (2)
-+/* [modify] end */
 +/* DRPAI_FREQ can be set from 1 to 127   */
 +/* 1,2: 1GHz                             */
 +/* 3: 630MHz                             */
@@ -90286,7 +90168,6 @@ index 0000000..bc158f3
 +#define IMG_AREA_CNV_ADDRESS        (0x58000000)    /* CMA area start address used by mmngr */
 +#define IMG_AREA_SIZE               (0x20000000)    /* CMA area size */
 +
-+/* [modify] start */
 +/* Image buffer size */
 +#define IMAGEBUF                    (IMAGE_OUTPUT_WIDTH * IMAGE_OUTPUT_HEIGHT * IMAGE_CHANNEL_BGRA)
 +/* DRP-AI Input image buffer size */
@@ -90295,7 +90176,6 @@ index 0000000..bc158f3
 +#else   /* (1) == DRPAI_INPUT_PADDING */
 +#define DRPAIBUF                    (CAM_IMAGE_WIDTH * CAM_IMAGE_HEIGHT * CAM_IMAGE_CHANNEL_YUY2)
 +#endif  /* (1) == DRPAI_INPUT_PADDING */
-+/* [modify] end */
 +
 +/*Image:: Text information to be drawn on image*/
 +#define CHAR_SCALE_LARGE            (0.8)
@@ -90413,7 +90293,7 @@ new file mode 100644
 index 0000000..1eb3f0c
 --- /dev/null
 +++ b/darknet_drp_ros/src/image.cpp
-@@ -0,0 +1,579 @@
+@@ -0,0 +1,573 @@
 +/***********************************************************************************************************************
 +* Copyright (C) 2024 Renesas Electronics Corporation. All rights reserved.
 +***********************************************************************************************************************/
@@ -90429,14 +90309,12 @@ index 0000000..1eb3f0c
 +#include "image.h"
 +#include <opencv2/opencv.hpp>
 +
-+/* [modify] start */
 +#include "rclcpp/rclcpp.hpp"
 +#include "rclcpp_action/rclcpp_action.hpp"
 +#include "std_msgs/msg/header.hpp"
 +#include "sensor_msgs/msg/image.hpp"
 +#include "geometry_msgs/msg/point.hpp"
 +#include "image_transport/image_transport.hpp"
-+/* [modify] end */
 +
 +Image::Image()
 +{
@@ -90862,9 +90740,7 @@ index 0000000..1eb3f0c
 +#ifdef DEBUG_TIME_FLG
 +    end = chrono::system_clock::now();
 +    double time = static_cast<double>(chrono::duration_cast<chrono::microseconds>(end - start).count() / 1000.0);
-+    /* [modify] start */
 +    RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "Convert YUYV To BGRA Time : %lf[ms]\n", time);
-+    /* [modify] end */
 +#endif // DEBUG_TIME_FLG
 +}
 +
@@ -90988,9 +90864,7 @@ index 0000000..1eb3f0c
 +#ifdef DEBUG_TIME_FLG
 +    end = chrono::system_clock::now();
 +    double time = static_cast<double>(chrono::duration_cast<chrono::microseconds>(end - start).count() / 1000.0);
-+    /* [modify] start */
 +    RCLCPP_INFO(rclcpp::get_logger("darknet_drp_ros"), "Reset Overlay Buffer Time : %lf[ms]\n", time);
-+    /* [modify] end */
 +#endif // DEBUG_TIME_FLG
 +}
 diff --git a/darknet_drp_ros/src/image.h b/darknet_drp_ros/src/image.h
@@ -91069,7 +90943,7 @@ new file mode 100644
 index 0000000..eb42c92
 --- /dev/null
 +++ b/darknet_drp_ros/src/main.cpp
-@@ -0,0 +1,1189 @@
+@@ -0,0 +1,1091 @@
 +/***********************************************************************************************************************
 +* Copyright (C) 2024 Renesas Electronics Corporation. All rights reserved.
 +***********************************************************************************************************************/
@@ -91098,20 +90972,16 @@ index 0000000..eb42c92
 +#include "box.h"
 +/*Mutual exclusion*/
 +#include <mutex>
-+/* [modify] start */
 +#include <opencv2/opencv.hpp>
 +#include <opencv2/imgproc/imgproc.hpp>
 +#include <opencv2/highgui/highgui.hpp>
 +#include <opencv2/objdetect/objdetect.hpp>
 +#include <cv_bridge/cv_bridge.h>
 +#include "main.h"
-+/* [modify] end */
 +
 +using namespace std;
-+/* [modify] start */
 +namespace drpai
 +{
-+/* [modify] end */
 +/*****************************************
 +* Global Variables
 +******************************************/
@@ -91128,10 +90998,8 @@ index 0000000..eb42c92
 +static Image img;
 +
 +/*AI Inference for DRPAI*/
-+/* [modify] start */
 +/* DRP-AI Driver file descriptor */
 +static int g_drpai_fd0 = -1;
-+/* [modify] end */
 +/* DRP-AI TVM[*1] Runtime object */
 +MeraDrpRuntimeWrapper runtime;
 +/* Pre-processing Runtime object */
@@ -91173,9 +91041,7 @@ index 0000000..eb42c92
 +*                 t1 = stop time
 +* Return value  : the time difference in ms
 +******************************************/
-+/* [modify] start */
 +double DRPAINode::timedifference_msec(struct timespec t0, struct timespec t1)
-+/* [modify] end */
 +{
 +    return (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1000000.0;
 +}
@@ -91187,9 +91053,7 @@ index 0000000..eb42c92
 +* Return value  : 0 if succeeded
 +*                 not 0 otherwise
 +******************************************/
-+/* [modify] start */
 +int8_t DRPAINode::get_result()
-+/* [modify] end */
 +{
 +    int8_t ret = 0;
 +    int32_t i = 0;
@@ -91232,9 +91096,7 @@ index 0000000..eb42c92
 +        }
 +        else
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Output data type : not floating point.");
-+            /* [modify] end */
 +            ret = -1;
 +            break;
 +        }
@@ -91249,9 +91111,7 @@ index 0000000..eb42c92
 +* Arguments     : x = input argument for the calculation
 +* Return value  : sigmoid result of input x
 +******************************************/
-+/* [modify] start */
 +double DRPAINode::sigmoid(double x)
-+/* [modify] end */
 +{
 +    return 1.0/(1.0 + exp(-x));
 +}
@@ -91262,9 +91122,7 @@ index 0000000..eb42c92
 +* Arguments     : val[] = array to be computed softmax
 +* Return value  : -
 +******************************************/
-+/* [modify] start */
 +void DRPAINode::softmax(float val[NUM_CLASS])
-+/* [modify] end */
 +{
 +    float max_num = -FLT_MAX;
 +    float sum = 0;
@@ -91295,9 +91153,7 @@ index 0000000..eb42c92
 +*                 channel = channel to access each bounding box attribute.
 +* Return value  : index to access the bounding box attribute.
 +******************************************/
-+/* [modify] start */
 +int32_t DRPAINode::index(uint8_t n, int32_t offs, int32_t channel)
-+/* [modify] end */
 +{
 +    uint8_t num_grid = num_grids[n];
 +    return offs + channel * num_grid * num_grid;
@@ -91313,9 +91169,7 @@ index 0000000..eb42c92
 +*                 x = Number to indicate which region [0~13]
 +* Return value  : offset to access the bounding box attributes.
 +******************************************/
-+/* [modify] start */
 +int32_t DRPAINode::offset(uint8_t n, int32_t b, int32_t y, int32_t x)
-+/* [modify] end */
 +{
 +    uint8_t num = num_grids[n];
 +    uint32_t prev_layer_num = 0;
@@ -91334,9 +91188,7 @@ index 0000000..eb42c92
 +* Arguments     : floatarr = drpai output address
 +* Return value  : -
 +******************************************/
-+/* [modify] start */
 +void DRPAINode::R_Post_Proc(float* floatarr)
-+/* [modify] end */
 +{
 +    /* Following variables are required for correct_region_boxes in Darknet implementation*/
 +    /* Note: This implementation refers to the "darknet detector test" */
@@ -91462,7 +91314,6 @@ index 0000000..eb42c92
 +    /* Non-Maximum Supression filter */
 +    filter_boxes_nms(det_buff, det_buff.size(), TH_NMS);
 +
-+    /* [modify] start */
 +    /* Convert YUYV image to BGRA format.(bounding box algorithm require BGRA format) */
 +    img.convert_format();
 +
@@ -91516,7 +91367,6 @@ index 0000000..eb42c92
 +    sensor_msgs::msg::Image ros_img;
 +    cv_image.toImageMsg(ros_img);
 +    detection_image_publisher->publish(ros_img);
-+    /* [modify] end */
 +
 +    mtx.lock();
 +    /* Clear the detected result list */
@@ -91533,9 +91383,7 @@ index 0000000..eb42c92
 +* Return value  : 0 if succeeded
 +*               not 0 otherwise
 +******************************************/
-+/* [modify] start */
 +void DRPAINode::draw_bounding_box(void)
-+/* [modify] end */
 +{
 +    vector<detection> det_buff;
 +    stringstream stream;
@@ -91564,7 +91412,6 @@ index 0000000..eb42c92
 +    return;
 +}
 +
-+/* [modify] start */
 +/*****************************************
 +* Function Name : R_Inf_Thread
 +* Description   : Executes the DRP-AI inference thread
@@ -91572,7 +91419,6 @@ index 0000000..eb42c92
 +* Return value  : -
 +******************************************/
 +void *DRPAINode::R_Inf_Thread()
-+/* [modify] end */
 +{
 +    /*Semaphore Variable*/
 +    int32_t inf_sem_check = 0;
@@ -91596,10 +91442,8 @@ index 0000000..eb42c92
 +    static struct timespec post_end_time;
 +    static struct timespec drp_prev_time = { .tv_sec = 0, .tv_nsec = 0, };
 +
-+    /* [modify] start */
 +    RCLCPP_INFO(this->get_logger(), "Inference Thread Starting");
 +    RCLCPP_INFO(this->get_logger(), "Inference Loop Starting");
-+    /* [modify] end */
 +
 +    /*Inference Loop Start*/
 +    while(1)
@@ -91607,13 +91451,11 @@ index 0000000..eb42c92
 +        inf_cnt++;
 +        while(1)
 +        {
-+            /* [modify] start */
 +            /* check if terminate() called or not. */
 +            if (bExec == false)
 +            {
 +                goto ai_inf_end;
 +            }
-+            /* [modify] end */
 +            /*Checks if image frame from Capture Thread is ready.*/
 +            if (inference_start.load())
 +            {
@@ -91627,26 +91469,20 @@ index 0000000..eb42c92
 +        ret = timespec_get(&pre_start_time, TIME_UTC);
 +        if (0 == ret)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to get Pre-process Start Time");
-+            /* [modify] end */
 +            goto err;
 +        }
 +        ret = preruntime.Pre(&in_param, &output_ptr, &out_size);
 +        if (0 < ret)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to run DRPAI_START: errno=%d", errno);
-+            /* [modify] end */
 +            goto err;
 +        }
 +        /*Gets AI Pre-process End Time*/
 +        ret = timespec_get(&pre_end_time, TIME_UTC);
 +        if ( 0 == ret)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to Get Pre-process End Time");
-+            /* [modify] end */
 +            goto err;
 +        }
 +        /*Set Pre-processing output to be inference input. */
@@ -91658,9 +91494,7 @@ index 0000000..eb42c92
 +        ret = timespec_get(&inf_start_time, TIME_UTC);
 +        if (0 == ret)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to get Inference Start Time");
-+            /* [modify] end */
 +            goto err;
 +        }
 +
@@ -91670,9 +91504,7 @@ index 0000000..eb42c92
 +        ret = timespec_get(&inf_end_time, TIME_UTC);
 +        if ( 0 == ret)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to Get Inference End Time");
-+            /* [modify] end */
 +            goto err;
 +        }
 +        /*Inference Time Result*/
@@ -91682,9 +91514,7 @@ index 0000000..eb42c92
 +        ret = timespec_get(&post_start_time, TIME_UTC);
 +        if (0 == ret)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to get Post-process Start Time");
-+            /* [modify] end */
 +            goto err;
 +        }
 +
@@ -91692,9 +91522,7 @@ index 0000000..eb42c92
 +        ret = get_result();
 +        if (0 != ret)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to get result from memory.");
-+            /* [modify] end */
 +            goto err;
 +        }
 +        /*Preparation for Post-Processing*/
@@ -91705,9 +91533,7 @@ index 0000000..eb42c92
 +        ret = timespec_get(&post_end_time, TIME_UTC);
 +        if (0 == ret)
 +        {
-+            /* [modify] start */
 +            RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to Get R_Post_Proc End Time");
-+            /* [modify] end */
 +            goto err;
 +        }
 +        post_time = (timedifference_msec(post_start_time, post_end_time)*TIME_COEF);
@@ -91724,9 +91550,7 @@ index 0000000..eb42c92
 +        int arraySum = std::accumulate(array_drp_time, array_drp_time + SIZE_OF_ARRAY(array_drp_time), 0);
 +        double arrayAvg = 1.0 * arraySum / SIZE_OF_ARRAY(array_drp_time);
 +        ai_fps = 1.0 / arrayAvg * 1000.0 + 0.5;
-+        /* [modify] start */
 +        RCLCPP_INFO(this->get_logger(), "AI Frame Rate %d [fps]", (int32_t)ai_fps);
-+        /* [modify] end */
 +#endif /* DISP_AI_FRAME_RATE */
 +
 +        inference_start.store(0);
@@ -91738,14 +91562,11 @@ index 0000000..eb42c92
 +/*AI Thread Termination*/
 +ai_inf_end:
 +    /*To terminate the loop in Capture Thread.*/
-+    /* [modify] start */
 +    RCLCPP_INFO(this->get_logger(), "AI Inference Thread Terminated");
-+    /* [modify] end */
 +    pthread_exit(NULL);
 +}
 +
 +
-+/* [modify] start */
 +/*****************************************
 +* Function Name : camera_callback
 +* Description   : Executed when the camera captures
@@ -91836,7 +91657,6 @@ index 0000000..eb42c92
 +    }
 +    return;
 +}
-+/* [modify] end */
 +
 +/*****************************************
 +* Function Name : get_drpai_start_addr
@@ -91845,9 +91665,7 @@ index 0000000..eb42c92
 +* Return value  : If non-zero, DRP-AI memory start address.
 +*                 0 is failure.
 +******************************************/
-+/* [modify] start */
 +uint64_t DRPAINode::get_drpai_start_addr(int drpai_fd)
-+/* [modify] end */
 +{
 +    int ret = 0;
 +    drpai_data_t drpai_data;
@@ -91872,9 +91690,7 @@ index 0000000..eb42c92
 +* Return value  : 0 if succeeded
 +*                 not 0 otherwise
 +******************************************/
-+/* [modify] start */
 +int DRPAINode::set_drp_freq(int drpai_fd)
-+/* [modify] end */
 +{
 +    int ret = 0;
 +    uint32_t data;
@@ -91898,9 +91714,7 @@ index 0000000..eb42c92
 +* Return value  : If non-zero, DRP-AI memory start address.
 +*                 0 is failure.
 +******************************************/
-+/* [modify] start */
 +uint64_t DRPAINode::init_drpai(int drpai_fd)
-+/* [modify] end */
 +{
 +    int ret = 0;
 +    uint64_t drpai_addr = 0;
@@ -91922,7 +91736,6 @@ index 0000000..eb42c92
 +    return drpai_addr;
 +}
 +
-+/* [modify] start */
 +/*****************************************
 +* Function Name : main_entry
 +* Description   : Function to initialize DRP-AI.
@@ -91954,14 +91767,12 @@ index 0000000..eb42c92
 +                                std::string("bounding_boxes"), 1);
 +    detection_image_publisher = this->create_publisher<sensor_msgs::msg::Image>(
 +                                std::string("detection_image"), 1);
-+    /* [modify] end */
 +
 +    int8_t main_proc = 0;
 +    int8_t ret = 0;
 +    int8_t ret_main = 0;
 +    InOutDataType input_data_type;
 +    bool runtime_status = false;
-+    /* [modify] start */
 +    uint8_t * p_img_buffer0;
 +
 +    RCLCPP_INFO(this->get_logger(), "************************************************");
@@ -91979,52 +91790,37 @@ index 0000000..eb42c92
 +        RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to Allocate DMA buffer for the p_image_buf");
 +        return -1;
 +    }
-+    /* [modify] end */
 +    uint64_t drpaimem_addr_start = 0;
 +    
 +    errno = 0;
-+    /* [modify] start */
 +    g_drpai_fd0 = open("/dev/drpai0", O_RDWR);
 +    if (0 > g_drpai_fd0)
 +    {
 +        RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to open DRP-AI Driver : errno=%d", errno);
 +        goto end_threads;
 +    }
-+    /* [modify] end */
 +    
 +    /*Initialzie DRP-AI (Get DRP-AI memory address and set DRP-AI frequency)*/
-+    /* [modify] start */
 +    drpaimem_addr_start = init_drpai(g_drpai_fd0);
-+    /* [modify] end */
 +    if (drpaimem_addr_start == 0)
 +    {
-+        /* [modify] start */
 +        goto end_threads;
-+        /* [modify] end */
 +    }
 +
 +    /*Load pre_dir object to DRP-AI */
-+    /* [modify] start */
 +    ret = preruntime.Load(drpai_path + "/preprocess");
-+    /* [modify] end */
 +    if (0 < ret)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to run Pre-processing Runtime Load().");
 +        goto end_threads;
-+        /* [modify] end */
 +    }
 +
-+    /* [modify] start */
 +    runtime_status = runtime.LoadModel(drpai_path, drpaimem_addr_start);
-+    /* [modify] end */
 +
 +    if(!runtime_status)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to load model.");
 +        goto end_threads;
-+        /* [modify] end */
 +    }
 +
 +    /*Get input data */
@@ -92035,21 +91831,16 @@ index 0000000..eb42c92
 +    }
 +    else if (InOutDataType::FLOAT16 == input_data_type)
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(this->get_logger(), "[ERROR] Input data type : FP16.");
 +        /*If your model input data type is FP16, use std::vector<uint16_t> for reading input data. */
 +        goto end_threads;
-+        /* [modify] end */
 +    }
 +    else
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(this->get_logger(), "[ERROR] Input data type : neither FP32 nor FP16.");
 +        goto end_threads;
-+        /* [modify] end */
 +    }
 +
-+    /* [modify] start */
 +    /* Create drpai_buffer */
 +    /* cast check ok. There is no problem because it is malloc with the size of image_dma_buffer. */
 +    p_drpai_buf = (image_dma_buffer*)malloc(sizeof(image_dma_buffer));
@@ -92085,25 +91876,19 @@ index 0000000..eb42c92
 +    ret = img.init(CAM_IMAGE_WIDTH, CAM_IMAGE_HEIGHT, CAM_IMAGE_CHANNEL_YUY2,
 +        IMAGE_OUTPUT_WIDTH, IMAGE_OUTPUT_HEIGHT, IMAGE_CHANNEL_BGRA, p_image_buf->mem);
 +    if (0 != ret)
-+    /* [modify] end */
 +    {
-+        /* [modify] start */
 +        RCLCPP_INFO(this->get_logger(), "[ERROR] Failed to initialize Image object.");
-+        /* [modify] end */
 +        ret_main = ret;
 +        goto end_threads;
 +    }
 +
 +    /*Create Inference Thread*/
-+    /* [modify] start */
 +    ai_inf_thread = std::thread(&DRPAINode::R_Inf_Thread, this);
 +
 +end_threads:
-+    /* [modify] end */
 +    return ret_main;
 +}
 +
-+/* [modify] start */
 +/*****************************************
 +* Function Name : terminate
 +* Description   : terminate the DRP-AI inference thread
@@ -92139,9 +91924,7 @@ index 0000000..eb42c92
 +    RCLCPP_INFO(this->get_logger(), "Application End");
 +    return;
 +}
-+/* [modify] end */
 +
-+/* [modify] start */
 +/*****************************************
 +* Function Name : image_buffer_alloc_dmabuf
 +* Description   : Allocate a DMA buffer for the image
@@ -92150,7 +91933,6 @@ index 0000000..eb42c92
 +*                 not 0 otherwise
 +******************************************/
 +int8_t DRPAINode::image_buffer_alloc_dmabuf(struct image_dma_buffer *buffer, int buf_size)
-+/* [modify] end */
 +{
 +    MMNGR_ID id;
 +    uint32_t phard_addr;
@@ -92172,7 +91954,6 @@ index 0000000..eb42c92
 +    return 0;
 +}
 +
-+/* [modify] start */
 +/*****************************************
 +* Function Name : image_buffer_free_dmabuf
 +* Description   : free a DMA buffer for the image
@@ -92180,13 +91961,11 @@ index 0000000..eb42c92
 +* Return value  : -
 +******************************************/
 +void DRPAINode::image_buffer_free_dmabuf(struct image_dma_buffer *buffer)
-+/* [modify] end */
 +{
 +    mmngr_free_in_user_ext(buffer->idx);
 +    return;
 +}
 +
-+/* [modify] start */
 +/*****************************************
 +* Function Name : image_buffer_flush_dmabuf
 +* Description   : flush a DMA buffer for the image
@@ -92195,7 +91974,6 @@ index 0000000..eb42c92
 +*                 not 0 otherwise
 +******************************************/
 +int DRPAINode::image_buffer_flush_dmabuf(uint32_t idx, uint32_t size)
-+/* [modify] end */
 +{
 +    int mm_ret = 0;
 +    
@@ -92205,7 +91983,6 @@ index 0000000..eb42c92
 +    return mm_ret;
 +}
 +
-+/* [modify] start */
 +/*****************************************
 +* Function Name : DRPAINode
 +* Description   : constructor
@@ -92258,7 +92035,6 @@ index 0000000..eb42c92
 +
 +    return 0;
 +}
-+/* [modify] end */
 diff --git a/darknet_drp_ros/src/main.h b/darknet_drp_ros/src/main.h
 new file mode 100644
 index 0000000..e0d66e5
