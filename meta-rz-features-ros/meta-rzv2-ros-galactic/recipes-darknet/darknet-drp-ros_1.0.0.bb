@@ -80,18 +80,6 @@ ROS_BUILD_TYPE = "ament_cmake"
 
 inherit ros_${ROS_BUILD_TYPE}
 
-do_compile_prepend() {
-    mkdir -p ${RECIPE_SYSROOT}/usr/include/linux/
-    mkdir -p ${RECIPE_SYSROOT}/usr/include/uapi/linux/
-    cp ${STAGING_KERNEL_DIR}/include/linux/drpai.h      ${RECIPE_SYSROOT}/usr/include/linux/
-    cp ${STAGING_KERNEL_DIR}/include/uapi/linux/drpai.h ${RECIPE_SYSROOT}/usr/include/uapi/linux/
-    cp ${STAGING_KERNEL_DIR}/include/mmngr*.h ${RECIPE_SYSROOT}/usr/include/
-    cp ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngr-user-module/usr/local/include/mmngr_user_public.h ${RECIPE_SYSROOT}/usr/include/
-    cp ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngrbuf-user-module/usr/local/include/mmngr_buf_user_public.h ${RECIPE_SYSROOT}/usr/include/
-    cp ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngr-user-module/usr/lib64/libmmngr.so ${RECIPE_SYSROOT}/usr/lib64/
-    cp ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngrbuf-user-module/usr/lib64/libmmngrbuf.so ${RECIPE_SYSROOT}/usr/lib64/
-}
-
 FILES:${PN} += "\
   /usr/lib/lib*.so* \
   /usr/lib/darknet_drp_ros/darknet_drp_ros \

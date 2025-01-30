@@ -1,15 +1,9 @@
 # Copy library
-SRC_URI += " \
-    file://libtvm_runtime.so \
-    "
+DEPENDS += " drp-ai-tvm"
+RDEPENDS_${PN} += " drp-ai-tvm"
 
-do_compile:prepend() {
-    cp ${WORKDIR}/libtvm_runtime.so ${RECIPE_SYSROOT}/usr/lib64/
-}
-
-do_install:append() {
-    install -d ${D}/${libdir}
-    install -m 0755 ${WORKDIR}/libtvm_runtime.so ${D}/${libdir}
+do_configure:prepend() {
+    export TVM_HOME="${STAGING_DIR_HOST}/usr/include/tvm"
 }
 
 # Apply patches
