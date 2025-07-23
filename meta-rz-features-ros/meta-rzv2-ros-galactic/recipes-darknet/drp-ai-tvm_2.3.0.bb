@@ -47,8 +47,8 @@ do_install:append() {
     install -m 0644 ${STAGING_KERNEL_DIR}/include/mmngr*.h ${D}${includedir}
     install -m 0644 ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngr-user-module/usr/local/include/mmngr_user_public.h ${D}${includedir}
     install -m 0644 ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngrbuf-user-module/usr/local/include/mmngr_buf_user_public.h ${D}${includedir}
-    install -m 0755 ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngr-user-module/usr/lib64/libmmngr.so ${D}${libdir}
-    install -m 0755 ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngrbuf-user-module/usr/lib64/libmmngrbuf.so ${D}${libdir}
+    install -m 0755 ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngr-user-module/usr/lib/libmmngr.so ${D}${libdir}
+    install -m 0755 ${COMPONENTS_DIR}/${MACHINE_ARCH}/mmngrbuf-user-module/usr/lib/libmmngrbuf.so ${D}${libdir}
 }
 
 # Skip already-stripped for QA Check. libmmngr.so and libmmngrbuf.so are already-stripped.
