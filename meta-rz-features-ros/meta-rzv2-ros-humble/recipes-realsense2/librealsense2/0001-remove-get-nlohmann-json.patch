@@ -1,0 +1,10 @@
+diff --git a/CMake/external_json.cmake b/CMake/external_json.cmake
+index 6efbf39b..27af312e 100644
+--- a/CMake/external_json.cmake
++++ b/CMake/external_json.cmake
+@@ -47,4 +47,4 @@ function(get_nlohmann_json)
+ endfunction()
+ 
+ # Trigger the build
+-get_nlohmann_json()
++#get_nlohmann_json()

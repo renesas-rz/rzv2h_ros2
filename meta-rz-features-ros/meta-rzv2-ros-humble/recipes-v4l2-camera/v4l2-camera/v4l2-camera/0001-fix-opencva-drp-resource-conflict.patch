@@ -1,0 +1,24 @@
+From e95eeb9771a0ceb6ec2feef0ff3b43f5f6a50752 Mon Sep 17 00:00:00 2001
+From: v-azuse8846 <v-azuse8846@esol.co.jp>
+Date: Thu, 25 Jul 2024 14:13:07 +0900
+Subject: [PATCH] fix-opencva-drp-resource-conflict
+
+---
+ src/v4l2_camera.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/v4l2_camera.cpp b/src/v4l2_camera.cpp
+index 35774d6..010f6b0 100644
+--- a/src/v4l2_camera.cpp
++++ b/src/v4l2_camera.cpp
+@@ -38,6 +38,10 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
+     get_node_logging_interface()},
+   canceled_{false}
+ {
++    /* Disable DRP */
++    unsigned long oca_list[16] = {0};
++    OCA_Activate(&oca_list[0]);
++
+   // Prepare publisher
+   // This should happen before registering on_set_parameters_callback,
+   // else transport plugins will fail to declare their parameters

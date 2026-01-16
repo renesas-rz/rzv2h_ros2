@@ -1,0 +1,2079 @@
+diff --git a/cartographer/common/internal/blocking_queue.h b/cartographer/common/internal/blocking_queue.h
+index cba91c0..7e3a787 100644
+--- a/cartographer/common/internal/blocking_queue.h
++++ b/cartographer/common/internal/blocking_queue.h
+@@ -47,7 +47,7 @@ class BlockingQueue {
+ 
+   // Pushes a value onto the queue. Blocks if the queue is full.
+   void Push(T t) {
+-    const auto predicate = [this]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++    const auto predicate = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+       return QueueNotFullCondition();
+     };
+     absl::MutexLock lock(&mutex_);
+@@ -57,7 +57,7 @@ class BlockingQueue {
+ 
+   // Like push, but returns false if 'timeout' is reached.
+   bool PushWithTimeout(T t, const common::Duration timeout) {
+-    const auto predicate = [this]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++    const auto predicate = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+       return QueueNotFullCondition();
+     };
+     absl::MutexLock lock(&mutex_);
+@@ -71,7 +71,7 @@ class BlockingQueue {
+ 
+   // Pops the next value from the queue. Blocks until a value is available.
+   T Pop() {
+-    const auto predicate = [this]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++    const auto predicate = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+       return !QueueEmptyCondition();
+     };
+     absl::MutexLock lock(&mutex_);
+@@ -84,7 +84,7 @@ class BlockingQueue {
+ 
+   // Like Pop, but can timeout. Returns nullptr in this case.
+   T PopWithTimeout(const common::Duration timeout) {
+-    const auto predicate = [this]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++    const auto predicate = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+       return !QueueEmptyCondition();
+     };
+     absl::MutexLock lock(&mutex_);
+@@ -100,7 +100,7 @@ class BlockingQueue {
+   // Like Peek, but can timeout. Returns nullptr in this case.
+   template <typename R>
+   R* PeekWithTimeout(const common::Duration timeout) {
+-    const auto predicate = [this]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++    const auto predicate = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+       return !QueueEmptyCondition();
+     };
+     absl::MutexLock lock(&mutex_);
+@@ -131,7 +131,7 @@ class BlockingQueue {
+ 
+   // Blocks until the queue is empty.
+   void WaitUntilEmpty() {
+-    const auto predicate = [this]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++    const auto predicate = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+       return QueueEmptyCondition();
+     };
+     absl::MutexLock lock(&mutex_);
+@@ -140,18 +140,18 @@ class BlockingQueue {
+ 
+  private:
+   // Returns true iff the queue is empty.
+-  bool QueueEmptyCondition() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++  bool QueueEmptyCondition() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+     return deque_.empty();
+   }
+ 
+   // Returns true iff the queue is not full.
+-  bool QueueNotFullCondition() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++  bool QueueNotFullCondition() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+     return queue_size_ == kInfiniteQueueSize || deque_.size() < queue_size_;
+   }
+ 
+   absl::Mutex mutex_;
+-  const size_t queue_size_ GUARDED_BY(mutex_);
+-  std::deque<T> deque_ GUARDED_BY(mutex_);
++  const size_t queue_size_ ABSL_GUARDED_BY(mutex_);
++  std::deque<T> deque_ ABSL_GUARDED_BY(mutex_);
+ };
+ 
+ }  // namespace common
+diff --git a/cartographer/common/internal/testing/thread_pool_for_testing.cc b/cartographer/common/internal/testing/thread_pool_for_testing.cc
+index 89744ba..a4d540b 100644
+--- a/cartographer/common/internal/testing/thread_pool_for_testing.cc
++++ b/cartographer/common/internal/testing/thread_pool_for_testing.cc
+@@ -72,7 +72,7 @@ std::weak_ptr<Task> ThreadPoolForTesting::Schedule(std::unique_ptr<Task> task) {
+ 
+ void ThreadPoolForTesting::WaitUntilIdle() {
+   const auto predicate = [this]()
+-                             EXCLUSIVE_LOCKS_REQUIRED(mutex_) { return idle_; };
++                             ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) { return idle_; };
+   for (;;) {
+     {
+       absl::MutexLock locker(&mutex_);
+@@ -85,7 +85,7 @@ void ThreadPoolForTesting::WaitUntilIdle() {
+ }
+ 
+ void ThreadPoolForTesting::DoWork() {
+-  const auto predicate = [this]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++  const auto predicate = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+     return !task_queue_.empty() || !running_;
+   };
+   for (;;) {
+diff --git a/cartographer/common/internal/testing/thread_pool_for_testing.h b/cartographer/common/internal/testing/thread_pool_for_testing.h
+index f733d0f..9a10dfd 100644
+--- a/cartographer/common/internal/testing/thread_pool_for_testing.h
++++ b/cartographer/common/internal/testing/thread_pool_for_testing.h
+@@ -35,7 +35,7 @@ class ThreadPoolForTesting : public ThreadPoolInterface {
+   ~ThreadPoolForTesting();
+ 
+   std::weak_ptr<Task> Schedule(std::unique_ptr<Task> task)
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+ 
+   void WaitUntilIdle();
+ 
+@@ -44,14 +44,14 @@ class ThreadPoolForTesting : public ThreadPoolInterface {
+ 
+   void DoWork();
+ 
+-  void NotifyDependenciesCompleted(Task* task) LOCKS_EXCLUDED(mutex_) override;
++  void NotifyDependenciesCompleted(Task* task) ABSL_LOCKS_EXCLUDED(mutex_) override;
+ 
+   absl::Mutex mutex_;
+-  bool running_ GUARDED_BY(mutex_) = true;
+-  bool idle_ GUARDED_BY(mutex_) = true;
+-  std::deque<std::shared_ptr<Task>> task_queue_ GUARDED_BY(mutex_);
+-  std::map<Task*, std::shared_ptr<Task>> tasks_not_ready_ GUARDED_BY(mutex_);
+-  std::thread thread_ GUARDED_BY(mutex_);
++  bool running_ ABSL_GUARDED_BY(mutex_) = true;
++  bool idle_ ABSL_GUARDED_BY(mutex_) = true;
++  std::deque<std::shared_ptr<Task>> task_queue_ ABSL_GUARDED_BY(mutex_);
++  std::map<Task*, std::shared_ptr<Task>> tasks_not_ready_ ABSL_GUARDED_BY(mutex_);
++  std::thread thread_ ABSL_GUARDED_BY(mutex_);
+ };
+ 
+ }  // namespace testing
+diff --git a/cartographer/common/task.h b/cartographer/common/task.h
+index ae44fb1..4256225 100644
+--- a/cartographer/common/task.h
++++ b/cartographer/common/task.h
+@@ -38,34 +38,34 @@ class Task {
+   Task() = default;
+   ~Task();
+ 
+-  State GetState() LOCKS_EXCLUDED(mutex_);
++  State GetState() ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // State must be 'NEW'.
+-  void SetWorkItem(const WorkItem& work_item) LOCKS_EXCLUDED(mutex_);
++  void SetWorkItem(const WorkItem& work_item) ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // State must be 'NEW'. 'dependency' may be nullptr, in which case it is
+   // assumed completed.
+-  void AddDependency(std::weak_ptr<Task> dependency) LOCKS_EXCLUDED(mutex_);
++  void AddDependency(std::weak_ptr<Task> dependency) ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+  private:
+   // Allowed in all states.
+   void AddDependentTask(Task* dependent_task);
+ 
+   // State must be 'DEPENDENCIES_COMPLETED' and becomes 'COMPLETED'.
+-  void Execute() LOCKS_EXCLUDED(mutex_);
++  void Execute() ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // State must be 'NEW' and becomes 'DISPATCHED' or 'DEPENDENCIES_COMPLETED'.
+-  void SetThreadPool(ThreadPoolInterface* thread_pool) LOCKS_EXCLUDED(mutex_);
++  void SetThreadPool(ThreadPoolInterface* thread_pool) ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // State must be 'NEW' or 'DISPATCHED'. If 'DISPATCHED', may become
+   // 'DEPENDENCIES_COMPLETED'.
+   void OnDependenyCompleted();
+ 
+-  WorkItem work_item_ GUARDED_BY(mutex_);
+-  ThreadPoolInterface* thread_pool_to_notify_ GUARDED_BY(mutex_) = nullptr;
+-  State state_ GUARDED_BY(mutex_) = NEW;
+-  unsigned int uncompleted_dependencies_ GUARDED_BY(mutex_) = 0;
+-  std::set<Task*> dependent_tasks_ GUARDED_BY(mutex_);
++  WorkItem work_item_ ABSL_GUARDED_BY(mutex_);
++  ThreadPoolInterface* thread_pool_to_notify_ ABSL_GUARDED_BY(mutex_) = nullptr;
++  State state_ ABSL_GUARDED_BY(mutex_) = NEW;
++  unsigned int uncompleted_dependencies_ ABSL_GUARDED_BY(mutex_) = 0;
++  std::set<Task*> dependent_tasks_ ABSL_GUARDED_BY(mutex_);
+ 
+   absl::Mutex mutex_;
+ };
+diff --git a/cartographer/common/thread_pool.cc b/cartographer/common/thread_pool.cc
+index 2457152..f4681fa 100644
+--- a/cartographer/common/thread_pool.cc
++++ b/cartographer/common/thread_pool.cc
+@@ -83,7 +83,7 @@ void ThreadPool::DoWork() {
+   // away CPU resources from more important foreground threads.
+   CHECK_NE(nice(10), -1);
+ #endif
+-  const auto predicate = [this]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++  const auto predicate = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+     return !task_queue_.empty() || !running_;
+   };
+   for (;;) {
+diff --git a/cartographer/common/thread_pool.h b/cartographer/common/thread_pool.h
+index 3f6b94c..e98311b 100644
+--- a/cartographer/common/thread_pool.h
++++ b/cartographer/common/thread_pool.h
+@@ -65,19 +65,19 @@ class ThreadPool : public ThreadPoolInterface {
+   // When the returned weak pointer is expired, 'task' has certainly completed,
+   // so dependants no longer need to add it as a dependency.
+   std::weak_ptr<Task> Schedule(std::unique_ptr<Task> task)
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+ 
+  private:
+   void DoWork();
+ 
+-  void NotifyDependenciesCompleted(Task* task) LOCKS_EXCLUDED(mutex_) override;
++  void NotifyDependenciesCompleted(Task* task) ABSL_LOCKS_EXCLUDED(mutex_) override;
+ 
+   absl::Mutex mutex_;
+-  bool running_ GUARDED_BY(mutex_) = true;
+-  std::vector<std::thread> pool_ GUARDED_BY(mutex_);
+-  std::deque<std::shared_ptr<Task>> task_queue_ GUARDED_BY(mutex_);
++  bool running_ ABSL_GUARDED_BY(mutex_) = true;
++  std::vector<std::thread> pool_ ABSL_GUARDED_BY(mutex_);
++  std::deque<std::shared_ptr<Task>> task_queue_ ABSL_GUARDED_BY(mutex_);
+   absl::flat_hash_map<Task*, std::shared_ptr<Task>> tasks_not_ready_
+-      GUARDED_BY(mutex_);
++      ABSL_GUARDED_BY(mutex_);
+ };
+ 
+ }  // namespace common
+diff --git a/cartographer/common/thread_pool_test.cc b/cartographer/common/thread_pool_test.cc
+index fec82ee..6b44f32 100644
+--- a/cartographer/common/thread_pool_test.cc
++++ b/cartographer/common/thread_pool_test.cc
+@@ -34,7 +34,7 @@ class Receiver {
+ 
+   void WaitForNumberSequence(const std::vector<int>& expected_numbers) {
+     const auto predicate =
+-        [this, &expected_numbers]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++        [this, &expected_numbers]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+           return (received_numbers_.size() >= expected_numbers.size());
+         };
+     absl::MutexLock locker(&mutex_);
+@@ -43,7 +43,7 @@ class Receiver {
+   }
+ 
+   absl::Mutex mutex_;
+-  std::vector<int> received_numbers_ GUARDED_BY(mutex_);
++  std::vector<int> received_numbers_ ABSL_GUARDED_BY(mutex_);
+ };
+ 
+ TEST(ThreadPoolTest, RunTask) {
+diff --git a/cartographer/mapping/internal/2d/pose_graph_2d.cc b/cartographer/mapping/internal/2d/pose_graph_2d.cc
+index 060277e..e912442 100644
+--- a/cartographer/mapping/internal/2d/pose_graph_2d.cc
++++ b/cartographer/mapping/internal/2d/pose_graph_2d.cc
+@@ -164,7 +164,7 @@ NodeId PoseGraph2D::AddNode(
+   // execute the lambda.
+   const bool newly_finished_submap =
+       insertion_submaps.front()->insertion_finished();
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     return ComputeConstraintsForNode(node_id, insertion_submaps,
+                                      newly_finished_submap);
+   });
+@@ -208,7 +208,7 @@ void PoseGraph2D::AddTrajectoryIfNeeded(const int trajectory_id) {
+ 
+ void PoseGraph2D::AddImuData(const int trajectory_id,
+                              const sensor::ImuData& imu_data) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       optimization_problem_->AddImuData(trajectory_id, imu_data);
+@@ -219,7 +219,7 @@ void PoseGraph2D::AddImuData(const int trajectory_id,
+ 
+ void PoseGraph2D::AddOdometryData(const int trajectory_id,
+                                   const sensor::OdometryData& odometry_data) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       optimization_problem_->AddOdometryData(trajectory_id, odometry_data);
+@@ -231,7 +231,7 @@ void PoseGraph2D::AddOdometryData(const int trajectory_id,
+ void PoseGraph2D::AddFixedFramePoseData(
+     const int trajectory_id,
+     const sensor::FixedFramePoseData& fixed_frame_pose_data) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       optimization_problem_->AddFixedFramePoseData(trajectory_id,
+@@ -243,7 +243,7 @@ void PoseGraph2D::AddFixedFramePoseData(
+ 
+ void PoseGraph2D::AddLandmarkData(int trajectory_id,
+                                   const sensor::LandmarkData& landmark_data) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       for (const auto& observation : landmark_data.landmark_observations) {
+@@ -572,7 +572,7 @@ void PoseGraph2D::WaitForAllComputations() {
+   // a WhenDone() callback.
+   {
+     const auto predicate = [this]()
+-                               EXCLUSIVE_LOCKS_REQUIRED(work_queue_mutex_) {
++                               ABSL_EXCLUSIVE_LOCKS_REQUIRED(work_queue_mutex_) {
+                                  return work_queue_ == nullptr;
+                                };
+     absl::MutexLock locker(&work_queue_mutex_);
+@@ -589,13 +589,13 @@ void PoseGraph2D::WaitForAllComputations() {
+   constraint_builder_.WhenDone(
+       [this,
+        &notification](const constraints::ConstraintBuilder2D::Result& result)
+-          LOCKS_EXCLUDED(mutex_) {
++          ABSL_LOCKS_EXCLUDED(mutex_) {
+             absl::MutexLock locker(&mutex_);
+             data_.constraints.insert(data_.constraints.end(), result.begin(),
+                                      result.end());
+             notification = true;
+           });
+-  const auto predicate = [&notification]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++  const auto predicate = [&notification]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+     return notification;
+   };
+   while (!mutex_.AwaitWithTimeout(absl::Condition(&predicate),
+@@ -618,7 +618,7 @@ void PoseGraph2D::DeleteTrajectory(const int trajectory_id) {
+     it->second.deletion_state =
+         InternalTrajectoryState::DeletionState::SCHEDULED_FOR_DELETION;
+   }
+-  AddWorkItem([this, trajectory_id]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trajectory_id]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     CHECK(data_.trajectories_state.at(trajectory_id).state !=
+           TrajectoryState::ACTIVE);
+@@ -633,7 +633,7 @@ void PoseGraph2D::DeleteTrajectory(const int trajectory_id) {
+ }
+ 
+ void PoseGraph2D::FinishTrajectory(const int trajectory_id) {
+-  AddWorkItem([this, trajectory_id]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trajectory_id]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     CHECK(!IsTrajectoryFinished(trajectory_id));
+     data_.trajectories_state[trajectory_id].state = TrajectoryState::FINISHED;
+@@ -656,7 +656,7 @@ void PoseGraph2D::FreezeTrajectory(const int trajectory_id) {
+     absl::MutexLock locker(&mutex_);
+     data_.trajectory_connectivity_state.Add(trajectory_id);
+   }
+-  AddWorkItem([this, trajectory_id]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trajectory_id]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     CHECK(!IsTrajectoryFrozen(trajectory_id));
+     // Connect multiple frozen trajectories among each other.
+@@ -720,7 +720,7 @@ void PoseGraph2D::AddSubmapFromProto(
+   }
+ 
+   AddWorkItem(
+-      [this, submap_id, global_submap_pose_2d]() LOCKS_EXCLUDED(mutex_) {
++      [this, submap_id, global_submap_pose_2d]() ABSL_LOCKS_EXCLUDED(mutex_) {
+         absl::MutexLock locker(&mutex_);
+         data_.submap_data.at(submap_id).state = SubmapState::kFinished;
+         optimization_problem_->InsertSubmap(submap_id, global_submap_pose_2d);
+@@ -743,7 +743,7 @@ void PoseGraph2D::AddNodeFromProto(const transform::Rigid3d& global_pose,
+                                   TrajectoryNode{constant_data, global_pose});
+   }
+ 
+-  AddWorkItem([this, node_id, global_pose]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, node_id, global_pose]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     const auto& constant_data =
+         data_.trajectory_nodes.at(node_id).constant_data;
+@@ -772,7 +772,7 @@ void PoseGraph2D::SetTrajectoryDataFromProto(
+ 
+     const int trajectory_id = data.trajectory_id();
+     AddWorkItem([this, trajectory_id, trajectory_data]()
+-                    LOCKS_EXCLUDED(mutex_) {
++                    ABSL_LOCKS_EXCLUDED(mutex_) {
+                       absl::MutexLock locker(&mutex_);
+                       if (CanAddWorkItemModifying(trajectory_id)) {
+                         optimization_problem_->SetTrajectoryData(
+@@ -785,7 +785,7 @@ void PoseGraph2D::SetTrajectoryDataFromProto(
+ 
+ void PoseGraph2D::AddNodeToSubmap(const NodeId& node_id,
+                                   const SubmapId& submap_id) {
+-  AddWorkItem([this, node_id, submap_id]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, node_id, submap_id]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(submap_id.trajectory_id)) {
+       data_.submap_data.at(submap_id).node_ids.insert(node_id);
+@@ -796,7 +796,7 @@ void PoseGraph2D::AddNodeToSubmap(const NodeId& node_id,
+ 
+ void PoseGraph2D::AddSerializedConstraints(
+     const std::vector<Constraint>& constraints) {
+-  AddWorkItem([this, constraints]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, constraints]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     for (const auto& constraint : constraints) {
+       CHECK(data_.trajectory_nodes.Contains(constraint.node_id));
+@@ -831,7 +831,7 @@ void PoseGraph2D::AddSerializedConstraints(
+ void PoseGraph2D::AddTrimmer(std::unique_ptr<PoseGraphTrimmer> trimmer) {
+   // C++11 does not allow us to move a unique_ptr into a lambda.
+   PoseGraphTrimmer* const trimmer_ptr = trimmer.release();
+-  AddWorkItem([this, trimmer_ptr]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trimmer_ptr]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     trimmers_.emplace_back(trimmer_ptr);
+     return WorkItem::Result::kDoNotRunOptimization;
+@@ -840,13 +840,13 @@ void PoseGraph2D::AddTrimmer(std::unique_ptr<PoseGraphTrimmer> trimmer) {
+ 
+ void PoseGraph2D::RunFinalOptimization() {
+   {
+-    AddWorkItem([this]() LOCKS_EXCLUDED(mutex_) {
++    AddWorkItem([this]() ABSL_LOCKS_EXCLUDED(mutex_) {
+       absl::MutexLock locker(&mutex_);
+       optimization_problem_->SetMaxNumIterations(
+           options_.max_num_final_iterations());
+       return WorkItem::Result::kRunOptimization;
+     });
+-    AddWorkItem([this]() LOCKS_EXCLUDED(mutex_) {
++    AddWorkItem([this]() ABSL_LOCKS_EXCLUDED(mutex_) {
+       absl::MutexLock locker(&mutex_);
+       optimization_problem_->SetMaxNumIterations(
+           options_.optimization_problem_options()
+@@ -985,7 +985,7 @@ std::map<std::string, transform::Rigid3d> PoseGraph2D::GetLandmarkPoses()
+ void PoseGraph2D::SetLandmarkPose(const std::string& landmark_id,
+                                   const transform::Rigid3d& global_pose,
+                                   const bool frozen) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     data_.landmark_nodes[landmark_id].global_landmark_pose = global_pose;
+     data_.landmark_nodes[landmark_id].frozen = frozen;
+diff --git a/cartographer/mapping/internal/2d/pose_graph_2d.h b/cartographer/mapping/internal/2d/pose_graph_2d.h
+index 3733425..a90174b 100644
+--- a/cartographer/mapping/internal/2d/pose_graph_2d.h
++++ b/cartographer/mapping/internal/2d/pose_graph_2d.h
+@@ -81,28 +81,28 @@ class PoseGraph2D : public PoseGraph {
+       std::shared_ptr<const TrajectoryNode::Data> constant_data,
+       int trajectory_id,
+       const std::vector<std::shared_ptr<const Submap2D>>& insertion_submaps)
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   void AddImuData(int trajectory_id, const sensor::ImuData& imu_data) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void AddOdometryData(int trajectory_id,
+                        const sensor::OdometryData& odometry_data) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void AddFixedFramePoseData(
+       int trajectory_id,
+       const sensor::FixedFramePoseData& fixed_frame_pose_data) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void AddLandmarkData(int trajectory_id,
+                        const sensor::LandmarkData& landmark_data) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   void DeleteTrajectory(int trajectory_id) override;
+   void FinishTrajectory(int trajectory_id) override;
+   bool IsTrajectoryFinished(int trajectory_id) const override
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+   void FreezeTrajectory(int trajectory_id) override;
+   bool IsTrajectoryFrozen(int trajectory_id) const override
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+   void AddSubmapFromProto(const transform::Rigid3d& global_submap_pose,
+                           const proto::Submap& submap) override;
+   void AddNodeFromProto(const transform::Rigid3d& global_pose,
+@@ -115,61 +115,61 @@ class PoseGraph2D : public PoseGraph {
+   void AddTrimmer(std::unique_ptr<PoseGraphTrimmer> trimmer) override;
+   void RunFinalOptimization() override;
+   std::vector<std::vector<int>> GetConnectedTrajectories() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   PoseGraphInterface::SubmapData GetSubmapData(const SubmapId& submap_id) const
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+   MapById<SubmapId, PoseGraphInterface::SubmapData> GetAllSubmapData() const
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+   MapById<SubmapId, SubmapPose> GetAllSubmapPoses() const
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+   transform::Rigid3d GetLocalToGlobalTransform(int trajectory_id) const
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+   MapById<NodeId, TrajectoryNode> GetTrajectoryNodes() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   MapById<NodeId, TrajectoryNodePose> GetTrajectoryNodePoses() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   std::map<int, TrajectoryState> GetTrajectoryStates() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   std::map<std::string, transform::Rigid3d> GetLandmarkPoses() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void SetLandmarkPose(const std::string& landmark_id,
+                        const transform::Rigid3d& global_pose,
+                        const bool frozen = false) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   sensor::MapByTime<sensor::ImuData> GetImuData() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   sensor::MapByTime<sensor::OdometryData> GetOdometryData() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   sensor::MapByTime<sensor::FixedFramePoseData> GetFixedFramePoseData()
+-      const override LOCKS_EXCLUDED(mutex_);
++      const override ABSL_LOCKS_EXCLUDED(mutex_);
+   std::map<std::string /* landmark ID */, PoseGraph::LandmarkNode>
+-  GetLandmarkNodes() const override LOCKS_EXCLUDED(mutex_);
++  GetLandmarkNodes() const override ABSL_LOCKS_EXCLUDED(mutex_);
+   std::map<int, TrajectoryData> GetTrajectoryData() const override
+-      LOCKS_EXCLUDED(mutex_);
+-  std::vector<Constraint> constraints() const override LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
++  std::vector<Constraint> constraints() const override ABSL_LOCKS_EXCLUDED(mutex_);
+   void SetInitialTrajectoryPose(int from_trajectory_id, int to_trajectory_id,
+                                 const transform::Rigid3d& pose,
+                                 const common::Time time) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void SetGlobalSlamOptimizationCallback(
+       PoseGraphInterface::GlobalSlamOptimizationCallback callback) override;
+   transform::Rigid3d GetInterpolatedGlobalTrajectoryPose(
+       int trajectory_id, const common::Time time) const
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   static void RegisterMetrics(metrics::FamilyFactory* family_factory);
+ 
+  private:
+   MapById<SubmapId, PoseGraphInterface::SubmapData> GetSubmapDataUnderLock()
+-      const EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      const ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Handles a new work item.
+   void AddWorkItem(const std::function<WorkItem::Result()>& work_item)
+-      LOCKS_EXCLUDED(mutex_) LOCKS_EXCLUDED(work_queue_mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_) ABSL_LOCKS_EXCLUDED(work_queue_mutex_);
+ 
+   // Adds connectivity and sampler for a trajectory if it does not exist.
+   void AddTrajectoryIfNeeded(int trajectory_id)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Appends the new node and submap (if needed) to the internal data
+   // structures.
+@@ -177,66 +177,66 @@ class PoseGraph2D : public PoseGraph {
+       std::shared_ptr<const TrajectoryNode::Data> constant_data,
+       int trajectory_id,
+       const std::vector<std::shared_ptr<const Submap2D>>& insertion_submaps,
+-      const transform::Rigid3d& optimized_pose) LOCKS_EXCLUDED(mutex_);
++      const transform::Rigid3d& optimized_pose) ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // Grows the optimization problem to have an entry for every element of
+   // 'insertion_submaps'. Returns the IDs for the 'insertion_submaps'.
+   std::vector<SubmapId> InitializeGlobalSubmapPoses(
+       int trajectory_id, const common::Time time,
+       const std::vector<std::shared_ptr<const Submap2D>>& insertion_submaps)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Adds constraints for a node, and starts scan matching in the background.
+   WorkItem::Result ComputeConstraintsForNode(
+       const NodeId& node_id,
+       std::vector<std::shared_ptr<const Submap2D>> insertion_submaps,
+-      bool newly_finished_submap) LOCKS_EXCLUDED(mutex_);
++      bool newly_finished_submap) ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // Computes constraints for a node and submap pair.
+   void ComputeConstraint(const NodeId& node_id, const SubmapId& submap_id)
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // Deletes trajectories waiting for deletion. Must not be called during
+   // constraint search.
+-  void DeleteTrajectoriesIfNeeded() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++  void DeleteTrajectoriesIfNeeded() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Runs the optimization, executes the trimmers and processes the work queue.
+   void HandleWorkQueue(const constraints::ConstraintBuilder2D::Result& result)
+-      LOCKS_EXCLUDED(mutex_) LOCKS_EXCLUDED(work_queue_mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_) ABSL_LOCKS_EXCLUDED(work_queue_mutex_);
+ 
+   // Process pending tasks in the work queue on the calling thread, until the
+   // queue is either empty or an optimization is required.
+-  void DrainWorkQueue() LOCKS_EXCLUDED(mutex_)
+-      LOCKS_EXCLUDED(work_queue_mutex_);
++  void DrainWorkQueue() ABSL_LOCKS_EXCLUDED(mutex_)
++      ABSL_LOCKS_EXCLUDED(work_queue_mutex_);
+ 
+   // Waits until we caught up (i.e. nothing is waiting to be scheduled), and
+   // all computations have finished.
+-  void WaitForAllComputations() LOCKS_EXCLUDED(mutex_)
+-      LOCKS_EXCLUDED(work_queue_mutex_);
++  void WaitForAllComputations() ABSL_LOCKS_EXCLUDED(mutex_)
++      ABSL_LOCKS_EXCLUDED(work_queue_mutex_);
+ 
+   // Runs the optimization. Callers have to make sure, that there is only one
+   // optimization being run at a time.
+-  void RunOptimization() LOCKS_EXCLUDED(mutex_);
++  void RunOptimization() ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   bool CanAddWorkItemModifying(int trajectory_id)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Computes the local to global map frame transform based on the given
+   // 'global_submap_poses'.
+   transform::Rigid3d ComputeLocalToGlobalTransform(
+       const MapById<SubmapId, optimization::SubmapSpec2D>& global_submap_poses,
+-      int trajectory_id) const EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      int trajectory_id) const ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   SubmapData GetSubmapDataUnderLock(const SubmapId& submap_id) const
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   common::Time GetLatestNodeTime(const NodeId& node_id,
+                                  const SubmapId& submap_id) const
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Updates the trajectory connectivity structure with a new constraint.
+   void UpdateTrajectoryConnectivity(const Constraint& constraint)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   const proto::PoseGraphOptions options_;
+   GlobalSlamOptimizationCallback global_slam_optimization_callback_;
+@@ -245,14 +245,14 @@ class PoseGraph2D : public PoseGraph {
+ 
+   // If it exists, further work items must be added to this queue, and will be
+   // considered later.
+-  std::unique_ptr<WorkQueue> work_queue_ GUARDED_BY(work_queue_mutex_);
++  std::unique_ptr<WorkQueue> work_queue_ ABSL_GUARDED_BY(work_queue_mutex_);
+ 
+   // We globally localize a fraction of the nodes from each trajectory.
+   absl::flat_hash_map<int, std::unique_ptr<common::FixedRatioSampler>>
+-      global_localization_samplers_ GUARDED_BY(mutex_);
++      global_localization_samplers_ ABSL_GUARDED_BY(mutex_);
+ 
+   // Number of nodes added since last loop closure.
+-  int num_nodes_since_last_loop_closure_ GUARDED_BY(mutex_) = 0;
++  int num_nodes_since_last_loop_closure_ ABSL_GUARDED_BY(mutex_) = 0;
+ 
+   // Current optimization problem.
+   std::unique_ptr<optimization::OptimizationProblem2D> optimization_problem_;
+@@ -262,9 +262,9 @@ class PoseGraph2D : public PoseGraph {
+   common::ThreadPool* const thread_pool_;
+ 
+   // List of all trimmers to consult when optimizations finish.
+-  std::vector<std::unique_ptr<PoseGraphTrimmer>> trimmers_ GUARDED_BY(mutex_);
++  std::vector<std::unique_ptr<PoseGraphTrimmer>> trimmers_ ABSL_GUARDED_BY(mutex_);
+ 
+-  PoseGraphData data_ GUARDED_BY(mutex_);
++  PoseGraphData data_ ABSL_GUARDED_BY(mutex_);
+ 
+   ValueConversionTables conversion_tables_;
+ 
+@@ -278,17 +278,17 @@ class PoseGraph2D : public PoseGraph {
+     int num_submaps(int trajectory_id) const override;
+     std::vector<SubmapId> GetSubmapIds(int trajectory_id) const override;
+     MapById<SubmapId, SubmapData> GetOptimizedSubmapData() const override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+     const MapById<NodeId, TrajectoryNode>& GetTrajectoryNodes() const override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+     const std::vector<Constraint>& GetConstraints() const override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+     void TrimSubmap(const SubmapId& submap_id)
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_) override;
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_) override;
+     bool IsFinished(int trajectory_id) const override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+     void SetTrajectoryState(int trajectory_id, TrajectoryState state) override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+ 
+    private:
+     PoseGraph2D* const parent_;
+diff --git a/cartographer/mapping/internal/3d/pose_graph_3d.cc b/cartographer/mapping/internal/3d/pose_graph_3d.cc
+index 8a91e59..26a8677 100644
+--- a/cartographer/mapping/internal/3d/pose_graph_3d.cc
++++ b/cartographer/mapping/internal/3d/pose_graph_3d.cc
+@@ -152,7 +152,7 @@ NodeId PoseGraph3D::AddNode(
+   // execute the lambda.
+   const bool newly_finished_submap =
+       insertion_submaps.front()->insertion_finished();
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     return ComputeConstraintsForNode(node_id, insertion_submaps,
+                                      newly_finished_submap);
+   });
+@@ -196,7 +196,7 @@ void PoseGraph3D::AddTrajectoryIfNeeded(const int trajectory_id) {
+ 
+ void PoseGraph3D::AddImuData(const int trajectory_id,
+                              const sensor::ImuData& imu_data) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       optimization_problem_->AddImuData(trajectory_id, imu_data);
+@@ -207,7 +207,7 @@ void PoseGraph3D::AddImuData(const int trajectory_id,
+ 
+ void PoseGraph3D::AddOdometryData(const int trajectory_id,
+                                   const sensor::OdometryData& odometry_data) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       optimization_problem_->AddOdometryData(trajectory_id, odometry_data);
+@@ -219,7 +219,7 @@ void PoseGraph3D::AddOdometryData(const int trajectory_id,
+ void PoseGraph3D::AddFixedFramePoseData(
+     const int trajectory_id,
+     const sensor::FixedFramePoseData& fixed_frame_pose_data) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       optimization_problem_->AddFixedFramePoseData(trajectory_id,
+@@ -231,7 +231,7 @@ void PoseGraph3D::AddFixedFramePoseData(
+ 
+ void PoseGraph3D::AddLandmarkData(int trajectory_id,
+                                   const sensor::LandmarkData& landmark_data) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       for (const auto& observation : landmark_data.landmark_observations) {
+@@ -559,7 +559,7 @@ void PoseGraph3D::WaitForAllComputations() {
+   // a WhenDone() callback.
+   {
+     const auto predicate = [this]()
+-                               EXCLUSIVE_LOCKS_REQUIRED(work_queue_mutex_) {
++                               ABSL_EXCLUSIVE_LOCKS_REQUIRED(work_queue_mutex_) {
+                                  return work_queue_ == nullptr;
+                                };
+     absl::MutexLock locker(&work_queue_mutex_);
+@@ -576,13 +576,13 @@ void PoseGraph3D::WaitForAllComputations() {
+   constraint_builder_.WhenDone(
+       [this,
+        &notification](const constraints::ConstraintBuilder3D::Result& result)
+-          LOCKS_EXCLUDED(mutex_) {
++          ABSL_LOCKS_EXCLUDED(mutex_) {
+             absl::MutexLock locker(&mutex_);
+             data_.constraints.insert(data_.constraints.end(), result.begin(),
+                                      result.end());
+             notification = true;
+           });
+-  const auto predicate = [&notification]() EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
++  const auto predicate = [&notification]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+     return notification;
+   };
+   while (!mutex_.AwaitWithTimeout(absl::Condition(&predicate),
+@@ -605,7 +605,7 @@ void PoseGraph3D::DeleteTrajectory(const int trajectory_id) {
+     it->second.deletion_state =
+         InternalTrajectoryState::DeletionState::SCHEDULED_FOR_DELETION;
+   }
+-  AddWorkItem([this, trajectory_id]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trajectory_id]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     CHECK(data_.trajectories_state.at(trajectory_id).state !=
+           TrajectoryState::ACTIVE);
+@@ -620,7 +620,7 @@ void PoseGraph3D::DeleteTrajectory(const int trajectory_id) {
+ }
+ 
+ void PoseGraph3D::FinishTrajectory(const int trajectory_id) {
+-  AddWorkItem([this, trajectory_id]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trajectory_id]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     CHECK(!IsTrajectoryFinished(trajectory_id));
+     data_.trajectories_state[trajectory_id].state = TrajectoryState::FINISHED;
+@@ -643,7 +643,7 @@ void PoseGraph3D::FreezeTrajectory(const int trajectory_id) {
+     absl::MutexLock locker(&mutex_);
+     data_.trajectory_connectivity_state.Add(trajectory_id);
+   }
+-  AddWorkItem([this, trajectory_id]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trajectory_id]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     CHECK(!IsTrajectoryFrozen(trajectory_id));
+     // Connect multiple frozen trajectories among each other.
+@@ -703,7 +703,7 @@ void PoseGraph3D::AddSubmapFromProto(
+     kActiveSubmapsMetric->Increment();
+   }
+ 
+-  AddWorkItem([this, submap_id, global_submap_pose]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, submap_id, global_submap_pose]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     data_.submap_data.at(submap_id).state = SubmapState::kFinished;
+     optimization_problem_->InsertSubmap(submap_id, global_submap_pose);
+@@ -726,7 +726,7 @@ void PoseGraph3D::AddNodeFromProto(const transform::Rigid3d& global_pose,
+                                   TrajectoryNode{constant_data, global_pose});
+   }
+ 
+-  AddWorkItem([this, node_id, global_pose]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, node_id, global_pose]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     const auto& constant_data =
+         data_.trajectory_nodes.at(node_id).constant_data;
+@@ -751,7 +751,7 @@ void PoseGraph3D::SetTrajectoryDataFromProto(
+   }
+ 
+   const int trajectory_id = data.trajectory_id();
+-  AddWorkItem([this, trajectory_id, trajectory_data]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trajectory_id, trajectory_data]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(trajectory_id)) {
+       optimization_problem_->SetTrajectoryData(trajectory_id, trajectory_data);
+@@ -762,7 +762,7 @@ void PoseGraph3D::SetTrajectoryDataFromProto(
+ 
+ void PoseGraph3D::AddNodeToSubmap(const NodeId& node_id,
+                                   const SubmapId& submap_id) {
+-  AddWorkItem([this, node_id, submap_id]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, node_id, submap_id]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     if (CanAddWorkItemModifying(submap_id.trajectory_id)) {
+       data_.submap_data.at(submap_id).node_ids.insert(node_id);
+@@ -773,7 +773,7 @@ void PoseGraph3D::AddNodeToSubmap(const NodeId& node_id,
+ 
+ void PoseGraph3D::AddSerializedConstraints(
+     const std::vector<Constraint>& constraints) {
+-  AddWorkItem([this, constraints]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, constraints]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     for (const auto& constraint : constraints) {
+       CHECK(data_.trajectory_nodes.Contains(constraint.node_id));
+@@ -801,7 +801,7 @@ void PoseGraph3D::AddSerializedConstraints(
+ void PoseGraph3D::AddTrimmer(std::unique_ptr<PoseGraphTrimmer> trimmer) {
+   // C++11 does not allow us to move a unique_ptr into a lambda.
+   PoseGraphTrimmer* const trimmer_ptr = trimmer.release();
+-  AddWorkItem([this, trimmer_ptr]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([this, trimmer_ptr]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     trimmers_.emplace_back(trimmer_ptr);
+     return WorkItem::Result::kDoNotRunOptimization;
+@@ -810,13 +810,13 @@ void PoseGraph3D::AddTrimmer(std::unique_ptr<PoseGraphTrimmer> trimmer) {
+ 
+ void PoseGraph3D::RunFinalOptimization() {
+   {
+-    AddWorkItem([this]() LOCKS_EXCLUDED(mutex_) {
++    AddWorkItem([this]() ABSL_LOCKS_EXCLUDED(mutex_) {
+       absl::MutexLock locker(&mutex_);
+       optimization_problem_->SetMaxNumIterations(
+           options_.max_num_final_iterations());
+       return WorkItem::Result::kRunOptimization;
+     });
+-    AddWorkItem([this]() LOCKS_EXCLUDED(mutex_) {
++    AddWorkItem([this]() ABSL_LOCKS_EXCLUDED(mutex_) {
+       absl::MutexLock locker(&mutex_);
+       optimization_problem_->SetMaxNumIterations(
+           options_.optimization_problem_options()
+@@ -982,7 +982,7 @@ std::map<std::string, transform::Rigid3d> PoseGraph3D::GetLandmarkPoses()
+ void PoseGraph3D::SetLandmarkPose(const std::string& landmark_id,
+                                   const transform::Rigid3d& global_pose,
+                                   const bool frozen) {
+-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  AddWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     absl::MutexLock locker(&mutex_);
+     data_.landmark_nodes[landmark_id].global_landmark_pose = global_pose;
+     data_.landmark_nodes[landmark_id].frozen = frozen;
+diff --git a/cartographer/mapping/internal/3d/pose_graph_3d.h b/cartographer/mapping/internal/3d/pose_graph_3d.h
+index 12a3469..f38f20a 100644
+--- a/cartographer/mapping/internal/3d/pose_graph_3d.h
++++ b/cartographer/mapping/internal/3d/pose_graph_3d.h
+@@ -79,28 +79,28 @@ class PoseGraph3D : public PoseGraph {
+       std::shared_ptr<const TrajectoryNode::Data> constant_data,
+       int trajectory_id,
+       const std::vector<std::shared_ptr<const Submap3D>>& insertion_submaps)
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   void AddImuData(int trajectory_id, const sensor::ImuData& imu_data) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void AddOdometryData(int trajectory_id,
+                        const sensor::OdometryData& odometry_data) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void AddFixedFramePoseData(
+       int trajectory_id,
+       const sensor::FixedFramePoseData& fixed_frame_pose_data) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void AddLandmarkData(int trajectory_id,
+                        const sensor::LandmarkData& landmark_data) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   void DeleteTrajectory(int trajectory_id) override;
+   void FinishTrajectory(int trajectory_id) override;
+   bool IsTrajectoryFinished(int trajectory_id) const override
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+   void FreezeTrajectory(int trajectory_id) override;
+   bool IsTrajectoryFrozen(int trajectory_id) const override
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+   void AddSubmapFromProto(const transform::Rigid3d& global_submap_pose,
+                           const proto::Submap& submap) override;
+   void AddNodeFromProto(const transform::Rigid3d& global_pose,
+@@ -113,132 +113,132 @@ class PoseGraph3D : public PoseGraph {
+   void AddTrimmer(std::unique_ptr<PoseGraphTrimmer> trimmer) override;
+   void RunFinalOptimization() override;
+   std::vector<std::vector<int>> GetConnectedTrajectories() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   PoseGraph::SubmapData GetSubmapData(const SubmapId& submap_id) const
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+   MapById<SubmapId, SubmapData> GetAllSubmapData() const
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+   MapById<SubmapId, SubmapPose> GetAllSubmapPoses() const
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+   transform::Rigid3d GetLocalToGlobalTransform(int trajectory_id) const
+-      LOCKS_EXCLUDED(mutex_) override;
++      ABSL_LOCKS_EXCLUDED(mutex_) override;
+   MapById<NodeId, TrajectoryNode> GetTrajectoryNodes() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   MapById<NodeId, TrajectoryNodePose> GetTrajectoryNodePoses() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   std::map<int, TrajectoryState> GetTrajectoryStates() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   std::map<std::string, transform::Rigid3d> GetLandmarkPoses() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void SetLandmarkPose(const std::string& landmark_id,
+                        const transform::Rigid3d& global_pose,
+                        const bool frozen = false) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   sensor::MapByTime<sensor::ImuData> GetImuData() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   sensor::MapByTime<sensor::OdometryData> GetOdometryData() const override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   sensor::MapByTime<sensor::FixedFramePoseData> GetFixedFramePoseData()
+-      const override LOCKS_EXCLUDED(mutex_);
++      const override ABSL_LOCKS_EXCLUDED(mutex_);
+   std::map<std::string /* landmark ID */, PoseGraph::LandmarkNode>
+-  GetLandmarkNodes() const override LOCKS_EXCLUDED(mutex_);
++  GetLandmarkNodes() const override ABSL_LOCKS_EXCLUDED(mutex_);
+   std::map<int, TrajectoryData> GetTrajectoryData() const override;
+ 
+-  std::vector<Constraint> constraints() const override LOCKS_EXCLUDED(mutex_);
++  std::vector<Constraint> constraints() const override ABSL_LOCKS_EXCLUDED(mutex_);
+   void SetInitialTrajectoryPose(int from_trajectory_id, int to_trajectory_id,
+                                 const transform::Rigid3d& pose,
+                                 const common::Time time) override
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+   void SetGlobalSlamOptimizationCallback(
+       PoseGraphInterface::GlobalSlamOptimizationCallback callback) override;
+   transform::Rigid3d GetInterpolatedGlobalTrajectoryPose(
+       int trajectory_id, const common::Time time) const
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   static void RegisterMetrics(metrics::FamilyFactory* family_factory);
+ 
+  protected:
+   // Waits until we caught up (i.e. nothing is waiting to be scheduled), and
+   // all computations have finished.
+-  void WaitForAllComputations() LOCKS_EXCLUDED(mutex_)
+-      LOCKS_EXCLUDED(work_queue_mutex_);
++  void WaitForAllComputations() ABSL_LOCKS_EXCLUDED(mutex_)
++      ABSL_LOCKS_EXCLUDED(work_queue_mutex_);
+ 
+  private:
+   MapById<SubmapId, SubmapData> GetSubmapDataUnderLock() const
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Handles a new work item.
+   void AddWorkItem(const std::function<WorkItem::Result()>& work_item)
+-      LOCKS_EXCLUDED(mutex_) LOCKS_EXCLUDED(work_queue_mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_) ABSL_LOCKS_EXCLUDED(work_queue_mutex_);
+ 
+   // Adds connectivity and sampler for a trajectory if it does not exist.
+   void AddTrajectoryIfNeeded(int trajectory_id)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Appends the new node and submap (if needed) to the internal data stuctures.
+   NodeId AppendNode(
+       std::shared_ptr<const TrajectoryNode::Data> constant_data,
+       int trajectory_id,
+       const std::vector<std::shared_ptr<const Submap3D>>& insertion_submaps,
+-      const transform::Rigid3d& optimized_pose) LOCKS_EXCLUDED(mutex_);
++      const transform::Rigid3d& optimized_pose) ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // Grows the optimization problem to have an entry for every element of
+   // 'insertion_submaps'. Returns the IDs for the 'insertion_submaps'.
+   std::vector<SubmapId> InitializeGlobalSubmapPoses(
+       int trajectory_id, const common::Time time,
+       const std::vector<std::shared_ptr<const Submap3D>>& insertion_submaps)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Adds constraints for a node, and starts scan matching in the background.
+   WorkItem::Result ComputeConstraintsForNode(
+       const NodeId& node_id,
+       std::vector<std::shared_ptr<const Submap3D>> insertion_submaps,
+-      bool newly_finished_submap) LOCKS_EXCLUDED(mutex_);
++      bool newly_finished_submap) ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // Computes constraints for a node and submap pair.
+   void ComputeConstraint(const NodeId& node_id, const SubmapId& submap_id)
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   // Deletes trajectories waiting for deletion. Must not be called during
+   // constraint search.
+-  void DeleteTrajectoriesIfNeeded() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++  void DeleteTrajectoriesIfNeeded() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Runs the optimization, executes the trimmers and processes the work queue.
+   void HandleWorkQueue(const constraints::ConstraintBuilder3D::Result& result)
+-      LOCKS_EXCLUDED(mutex_) LOCKS_EXCLUDED(work_queue_mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_) ABSL_LOCKS_EXCLUDED(work_queue_mutex_);
+ 
+   // Process pending tasks in the work queue on the calling thread, until the
+   // queue is either empty or an optimization is required.
+-  void DrainWorkQueue() LOCKS_EXCLUDED(mutex_)
+-      LOCKS_EXCLUDED(work_queue_mutex_);
++  void DrainWorkQueue() ABSL_LOCKS_EXCLUDED(mutex_)
++      ABSL_LOCKS_EXCLUDED(work_queue_mutex_);
+ 
+   // Runs the optimization. Callers have to make sure, that there is only one
+   // optimization being run at a time.
+-  void RunOptimization() LOCKS_EXCLUDED(mutex_);
++  void RunOptimization() ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   bool CanAddWorkItemModifying(int trajectory_id)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Computes the local to global map frame transform based on the given
+   // 'global_submap_poses'.
+   transform::Rigid3d ComputeLocalToGlobalTransform(
+       const MapById<SubmapId, optimization::SubmapSpec3D>& global_submap_poses,
+-      int trajectory_id) const EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      int trajectory_id) const ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   PoseGraph::SubmapData GetSubmapDataUnderLock(const SubmapId& submap_id) const
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   common::Time GetLatestNodeTime(const NodeId& node_id,
+                                  const SubmapId& submap_id) const
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Logs histograms for the translational and rotational residual of node
+   // poses.
+-  void LogResidualHistograms() const EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++  void LogResidualHistograms() const ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Updates the trajectory connectivity structure with a new constraint.
+   void UpdateTrajectoryConnectivity(const Constraint& constraint)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   const proto::PoseGraphOptions options_;
+   GlobalSlamOptimizationCallback global_slam_optimization_callback_;
+@@ -247,14 +247,14 @@ class PoseGraph3D : public PoseGraph {
+ 
+   // If it exists, further work items must be added to this queue, and will be
+   // considered later.
+-  std::unique_ptr<WorkQueue> work_queue_ GUARDED_BY(work_queue_mutex_);
++  std::unique_ptr<WorkQueue> work_queue_ ABSL_GUARDED_BY(work_queue_mutex_);
+ 
+   // We globally localize a fraction of the nodes from each trajectory.
+   absl::flat_hash_map<int, std::unique_ptr<common::FixedRatioSampler>>
+-      global_localization_samplers_ GUARDED_BY(mutex_);
++      global_localization_samplers_ ABSL_GUARDED_BY(mutex_);
+ 
+   // Number of nodes added since last loop closure.
+-  int num_nodes_since_last_loop_closure_ GUARDED_BY(mutex_) = 0;
++  int num_nodes_since_last_loop_closure_ ABSL_GUARDED_BY(mutex_) = 0;
+ 
+   // Current optimization problem.
+   std::unique_ptr<optimization::OptimizationProblem3D> optimization_problem_;
+@@ -264,9 +264,9 @@ class PoseGraph3D : public PoseGraph {
+   common::ThreadPool* const thread_pool_;
+ 
+   // List of all trimmers to consult when optimizations finish.
+-  std::vector<std::unique_ptr<PoseGraphTrimmer>> trimmers_ GUARDED_BY(mutex_);
++  std::vector<std::unique_ptr<PoseGraphTrimmer>> trimmers_ ABSL_GUARDED_BY(mutex_);
+ 
+-  PoseGraphData data_ GUARDED_BY(mutex_);
++  PoseGraphData data_ ABSL_GUARDED_BY(mutex_);
+ 
+   // Allows querying and manipulating the pose graph by the 'trimmers_'. The
+   // 'mutex_' of the pose graph is held while this class is used.
+@@ -278,18 +278,18 @@ class PoseGraph3D : public PoseGraph {
+     int num_submaps(int trajectory_id) const override;
+     std::vector<SubmapId> GetSubmapIds(int trajectory_id) const override;
+     MapById<SubmapId, SubmapData> GetOptimizedSubmapData() const override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+     const MapById<NodeId, TrajectoryNode>& GetTrajectoryNodes() const override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+     const std::vector<Constraint>& GetConstraints() const override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+     void TrimSubmap(const SubmapId& submap_id)
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_) override;
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_) override;
+     bool IsFinished(int trajectory_id) const override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+ 
+     void SetTrajectoryState(int trajectory_id, TrajectoryState state) override
+-        EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
++        ABSL_EXCLUSIVE_LOCKS_REQUIRED(parent_->mutex_);
+ 
+    private:
+     PoseGraph3D* const parent_;
+diff --git a/cartographer/mapping/internal/3d/rotation_parameterization.h b/cartographer/mapping/internal/3d/rotation_parameterization.h
+index 10e46c8..fb375cd 100644
+--- a/cartographer/mapping/internal/3d/rotation_parameterization.h
++++ b/cartographer/mapping/internal/3d/rotation_parameterization.h
+@@ -24,10 +24,7 @@
+ namespace cartographer {
+ namespace mapping {
+ 
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-// Provides operations used to create a Ceres Manifold with a 4-D ambient
+-// space and a 1-D tangent space that represents a yaw rotation only.
+-struct YawOnlyQuaternionOperations {
++struct YawOnlyQuaternionFunctor {
+   template <typename T>
+   bool Plus(const T* x, const T* delta, T* x_plus_delta) const {
+     const T clamped_delta = common::Clamp(delta[0], T(-0.5), T(0.5));
+@@ -39,20 +36,33 @@ struct YawOnlyQuaternionOperations {
+     ceres::QuaternionProduct(q_delta, x, x_plus_delta);
+     return true;
+   }
++
+   template <typename T>
+   bool Minus(const T* y, const T* x, T* y_minus_x) const {
+-    T minus_x[4] = {x[0], -x[1], -x[2], -x[3]};
++    //TODO
++    
++    // Compute the quaternion representing the inverse of the rotation
++    T q_inv[4];
++    q_inv[0] = y[0];
++    q_inv[1] = -y[1];
++    q_inv[2] = -y[2];
++    q_inv[3] = -y[3];
++
++    // Compute the delta quaternion
+     T q_delta[4];
+-    ceres::QuaternionProduct(y, minus_x, q_delta);
+-    y_minus_x[0] = q_delta[3];
++    ceres::QuaternionProduct(q_inv, x, q_delta);
++
++    // Extract the clamped delta from the delta quaternion
++    T clamped_delta = q_delta[3];
++    clamped_delta = common::Clamp(clamped_delta, T(-0.5), T(0.5));
++
++    y_minus_x[0] = clamped_delta;
++
+     return true;
+   }
+ };
+ 
+-// Provides operations used to create a Ceres Manifold with a 4-D ambient
+-// space and a 2-D tangent space that represents a rotation only in pitch and
+-// roll, but no yaw.
+-struct ConstantYawQuaternionOperations {
++struct ConstantYawQuaternionFunctor {
+   template <typename T>
+   bool Plus(const T* x, const T* delta, T* x_plus_delta) const {
+     const T delta_norm =
+@@ -73,60 +83,34 @@ struct ConstantYawQuaternionOperations {
+     ceres::QuaternionProduct(x, q_delta, x_plus_delta);
+     return true;
+   }
++
+   template <typename T>
+   bool Minus(const T* y, const T* x, T* y_minus_x) const {
+-    T minus_x[4] = {x[0], -x[1], -x[2], -x[3]};
+-    T q_delta[4];
+-    ceres::QuaternionProduct(minus_x, y, q_delta);
+-    const T& cos_delta_norm = q_delta[0];
+-    const T sin_delta_norm =
+-        ceres::sqrt(common::Pow2(q_delta[1]) + common::Pow2(q_delta[2]));
+-    const T delta_norm = atan2(sin_delta_norm, cos_delta_norm);
+-    const T delta_over_sin_delta =
+-        delta_norm < 1e-6 ? T(1.) : delta_norm / sin_delta_norm;
+-    y_minus_x[0] = q_delta[1] * delta_over_sin_delta;
+-    y_minus_x[1] = q_delta[2] * delta_over_sin_delta;
+-    return true;
+-  }
+-};
+-#else
+-struct YawOnlyQuaternionPlus {
+-  template <typename T>
+-  bool operator()(const T* x, const T* delta, T* x_plus_delta) const {
+-    const T clamped_delta = common::Clamp(delta[0], T(-0.5), T(0.5));
+-    T q_delta[4];
+-    q_delta[0] = ceres::sqrt(1. - clamped_delta * clamped_delta);
+-    q_delta[1] = T(0.);
+-    q_delta[2] = T(0.);
+-    q_delta[3] = clamped_delta;
+-    ceres::QuaternionProduct(q_delta, x, x_plus_delta);
+-    return true;
+-  }
+-};
++    //TODO
+ 
+-struct ConstantYawQuaternionPlus {
+-  template <typename T>
+-  bool operator()(const T* x, const T* delta, T* x_plus_delta) const {
+-    const T delta_norm =
+-        ceres::sqrt(common::Pow2(delta[0]) + common::Pow2(delta[1]));
+-    const T sin_delta_over_delta =
+-        delta_norm < 1e-6 ? T(1.) : ceres::sin(delta_norm) / delta_norm;
++    T q_inv[4];
++    q_inv[0] = y[0];
++    q_inv[1] = -y[1];
++    q_inv[2] = -y[2];
++    q_inv[3] = -y[3];
++    
++    // Compute the delta quaternion
+     T q_delta[4];
+-    q_delta[0] = delta_norm < 1e-6 ? T(1.) : ceres::cos(delta_norm);
+-    q_delta[1] = sin_delta_over_delta * delta[0];
+-    q_delta[2] = sin_delta_over_delta * delta[1];
+-    q_delta[3] = T(0.);
+-    // We apply the 'delta' which is interpreted as an angle-axis rotation
+-    // vector in the xy-plane of the submap frame. This way we can align to
+-    // gravity because rotations around the z-axis in the submap frame do not
+-    // change gravity alignment, while disallowing random rotations of the map
+-    // that have nothing to do with gravity alignment (i.e. we disallow steps
+-    // just changing "yaw" of the complete map).
+-    ceres::QuaternionProduct(x, q_delta, x_plus_delta);
++    ceres::QuaternionProduct(q_inv, x, q_delta);
++
++    // Extract the angle-axis rotation vector from the delta quaternion
++    T delta_norm = ceres::acos(q_delta[0]);
++    T sin_delta_norm = ceres::sin(delta_norm);
++    if (sin_delta_norm > T(1e-6)) {
++        y_minus_x[0] = q_delta[1] / sin_delta_norm * delta_norm;
++        y_minus_x[1] = q_delta[2] / sin_delta_norm * delta_norm;
++    } else {
++        y_minus_x[0] = q_delta[1];
++        y_minus_x[1] = q_delta[2];
++    }
+     return true;
+   }
+ };
+-#endif
+ 
+ }  // namespace mapping
+ }  // namespace cartographer
+diff --git a/cartographer/mapping/internal/3d/rotation_parameterization_test.cc b/cartographer/mapping/internal/3d/rotation_parameterization_test.cc
+deleted file mode 100644
+index 977d277..0000000
+--- a/cartographer/mapping/internal/3d/rotation_parameterization_test.cc
++++ /dev/null
+@@ -1,50 +0,0 @@
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-#include "cartographer/mapping/internal/3d/rotation_parameterization.h"
+-
+-#include "ceres/manifold_test_utils.h"
+-#include "gtest/gtest.h"
+-
+-namespace cartographer::mapping {
+-
+-template <typename T>
+-class RotationParameterizationTests : public ::testing::Test {};
+-
+-using TestTypes =
+-    ::testing::Types<ceres::AutoDiffManifold<YawOnlyQuaternionOperations, 4, 1>, ceres::AutoDiffManifold<ConstantYawQuaternionOperations, 4, 2>>;
+-TYPED_TEST_SUITE(RotationParameterizationTests, TestTypes);
+-
+-TYPED_TEST(RotationParameterizationTests, ManifoldInvariantsHold) {
+-  const TypeParam manifold;
+-
+-  constexpr static int kNumTrials = 10;
+-  constexpr static double kTolerance = 1.e-5;
+-  const std::vector<double> delta_magnitutes = {0.0, 1.e-9, 1.e-3, 0.5};
+-  for (int trial = 0; trial < kNumTrials; ++trial) {
+-    const Eigen::VectorXd x =
+-        Eigen::VectorXd::Random(manifold.AmbientSize()).normalized();
+-
+-    for (const double delta_magnitude : delta_magnitutes) {
+-      const Eigen::VectorXd delta =
+-          Eigen::VectorXd::Random(manifold.TangentSize()) * delta_magnitude;
+-      EXPECT_THAT(manifold, ceres::XPlusZeroIsXAt(x, kTolerance));
+-      EXPECT_THAT(manifold, ceres::XMinusXIsZeroAt(x, kTolerance));
+-      EXPECT_THAT(manifold, ceres::MinusPlusIsIdentityAt(x, delta, kTolerance));
+-      const Eigen::VectorXd zero_tangent =
+-          Eigen::VectorXd::Zero(manifold.TangentSize());
+-      EXPECT_THAT(manifold,
+-                  ceres::MinusPlusIsIdentityAt(x, zero_tangent, kTolerance));
+-
+-      Eigen::VectorXd y(manifold.AmbientSize());
+-      ASSERT_TRUE(manifold.Plus(x.data(), delta.data(), y.data()));
+-      EXPECT_THAT(manifold, ceres::PlusMinusIsIdentityAt(x, x, kTolerance));
+-      EXPECT_THAT(manifold, ceres::PlusMinusIsIdentityAt(x, y, kTolerance));
+-      EXPECT_THAT(manifold, ceres::HasCorrectPlusJacobianAt(x, kTolerance));
+-      EXPECT_THAT(manifold, ceres::HasCorrectMinusJacobianAt(x, kTolerance));
+-      EXPECT_THAT(manifold,
+-                  ceres::MinusPlusJacobianIsIdentityAt(x, kTolerance));
+-    }
+-  }
+-}
+-
+-}  // namespace cartographer::mapping
+-#endif
+diff --git a/cartographer/mapping/internal/3d/scan_matching/ceres_scan_matcher_3d.cc b/cartographer/mapping/internal/3d/scan_matching/ceres_scan_matcher_3d.cc
+index 0c287b6..350f5fa 100644
+--- a/cartographer/mapping/internal/3d/scan_matching/ceres_scan_matcher_3d.cc
++++ b/cartographer/mapping/internal/3d/scan_matching/ceres_scan_matcher_3d.cc
+@@ -31,9 +31,6 @@
+ #include "cartographer/transform/rigid_transform.h"
+ #include "cartographer/transform/transform.h"
+ #include "ceres/ceres.h"
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-#include "ceres/manifold.h"
+-#endif
+ #include "glog/logging.h"
+ 
+ namespace cartographer {
+@@ -98,26 +95,15 @@ void CeresScanMatcher3D::Match(
+     transform::Rigid3d* const pose_estimate,
+     ceres::Solver::Summary* const summary) const {
+   ceres::Problem problem;
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+   optimization::CeresPose ceres_pose(
+       initial_pose_estimate, nullptr /* translation_parameterization */,
+       options_.only_optimize_yaw()
+           ? std::unique_ptr<ceres::Manifold>(
+-                absl::make_unique<ceres::AutoDiffManifold<YawOnlyQuaternionOperations, 4, 1>>())
++                absl::make_unique<ceres::AutoDiffManifold<
++                    YawOnlyQuaternionFunctor, 4, 1>>())
+           : std::unique_ptr<ceres::Manifold>(
+                 absl::make_unique<ceres::QuaternionManifold>()),
+       &problem);
+-#else
+-  optimization::CeresPose ceres_pose(
+-      initial_pose_estimate, nullptr /* translation_parameterization */,
+-      options_.only_optimize_yaw()
+-          ? std::unique_ptr<ceres::LocalParameterization>(
+-                absl::make_unique<ceres::AutoDiffLocalParameterization<
+-                    YawOnlyQuaternionPlus, 4, 1>>())
+-          : std::unique_ptr<ceres::LocalParameterization>(
+-                absl::make_unique<ceres::QuaternionParameterization>()),
+-      &problem);
+-#endif
+ 
+   CHECK_EQ(options_.occupied_space_weight_size(),
+            point_clouds_and_hybrid_grids.size());
+diff --git a/cartographer/mapping/internal/connected_components.h b/cartographer/mapping/internal/connected_components.h
+index 05f327e..bc9cb69 100644
+--- a/cartographer/mapping/internal/connected_components.h
++++ b/cartographer/mapping/internal/connected_components.h
+@@ -41,45 +41,45 @@ class ConnectedComponents {
+   ConnectedComponents& operator=(const ConnectedComponents&) = delete;
+ 
+   // Add a trajectory which is initially connected to only itself.
+-  void Add(int trajectory_id) LOCKS_EXCLUDED(lock_);
++  void Add(int trajectory_id) ABSL_LOCKS_EXCLUDED(lock_);
+ 
+   // Connect two trajectories. If either trajectory is untracked, it will be
+   // tracked. This function is invariant to the order of its arguments. Repeated
+   // calls to Connect increment the connectivity count.
+-  void Connect(int trajectory_id_a, int trajectory_id_b) LOCKS_EXCLUDED(lock_);
++  void Connect(int trajectory_id_a, int trajectory_id_b) ABSL_LOCKS_EXCLUDED(lock_);
+ 
+   // Determines if two trajectories have been (transitively) connected. If
+   // either trajectory is not being tracked, returns false, except when it is
+   // the same trajectory, where it returns true. This function is invariant to
+   // the order of its arguments.
+   bool TransitivelyConnected(int trajectory_id_a, int trajectory_id_b)
+-      LOCKS_EXCLUDED(lock_);
++      ABSL_LOCKS_EXCLUDED(lock_);
+ 
+   // Return the number of _direct_ connections between 'trajectory_id_a' and
+   // 'trajectory_id_b'. If either trajectory is not being tracked, returns 0.
+   // This function is invariant to the order of its arguments.
+   int ConnectionCount(int trajectory_id_a, int trajectory_id_b)
+-      LOCKS_EXCLUDED(lock_);
++      ABSL_LOCKS_EXCLUDED(lock_);
+ 
+   // The trajectory IDs, grouped by connectivity.
+-  std::vector<std::vector<int>> Components() LOCKS_EXCLUDED(lock_);
++  std::vector<std::vector<int>> Components() ABSL_LOCKS_EXCLUDED(lock_);
+ 
+   // The list of trajectory IDs that belong to the same connected component as
+   // 'trajectory_id'.
+-  std::vector<int> GetComponent(int trajectory_id) LOCKS_EXCLUDED(lock_);
++  std::vector<int> GetComponent(int trajectory_id) ABSL_LOCKS_EXCLUDED(lock_);
+ 
+  private:
+   // Find the representative and compresses the path to it.
+-  int FindSet(int trajectory_id) EXCLUSIVE_LOCKS_REQUIRED(lock_);
++  int FindSet(int trajectory_id) ABSL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
+   void Union(int trajectory_id_a, int trajectory_id_b)
+-      EXCLUSIVE_LOCKS_REQUIRED(lock_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(lock_);
+ 
+   absl::Mutex lock_;
+   // Tracks transitive connectivity using a disjoint set forest, i.e. each
+   // entry points towards the representative for the given trajectory.
+-  std::map<int, int> forest_ GUARDED_BY(lock_);
++  std::map<int, int> forest_ ABSL_GUARDED_BY(lock_);
+   // Tracks the number of direct connections between a pair of trajectories.
+-  std::map<std::pair<int, int>, int> connection_map_ GUARDED_BY(lock_);
++  std::map<std::pair<int, int>, int> connection_map_ ABSL_GUARDED_BY(lock_);
+ };
+ 
+ // Returns a proto encoding connected components.
+diff --git a/cartographer/mapping/internal/constraints/constraint_builder_2d.cc b/cartographer/mapping/internal/constraints/constraint_builder_2d.cc
+index ad3dfb7..32c88a4 100644
+--- a/cartographer/mapping/internal/constraints/constraint_builder_2d.cc
++++ b/cartographer/mapping/internal/constraints/constraint_builder_2d.cc
+@@ -100,7 +100,7 @@ void ConstraintBuilder2D::MaybeAddConstraint(
+   const auto* scan_matcher =
+       DispatchScanMatcherConstruction(submap_id, submap->grid());
+   auto constraint_task = absl::make_unique<common::Task>();
+-  constraint_task->SetWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  constraint_task->SetWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     ComputeConstraint(submap_id, submap, node_id, false, /* match_full_submap */
+                       constant_data, initial_relative_pose, *scan_matcher,
+                       constraint);
+@@ -125,7 +125,7 @@ void ConstraintBuilder2D::MaybeAddGlobalConstraint(
+   const auto* scan_matcher =
+       DispatchScanMatcherConstruction(submap_id, submap->grid());
+   auto constraint_task = absl::make_unique<common::Task>();
+-  constraint_task->SetWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  constraint_task->SetWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     ComputeConstraint(submap_id, submap, node_id, true, /* match_full_submap */
+                       constant_data, transform::Rigid2d::Identity(),
+                       *scan_matcher, constraint);
+diff --git a/cartographer/mapping/internal/constraints/constraint_builder_2d.h b/cartographer/mapping/internal/constraints/constraint_builder_2d.h
+index 6667fdb..b61f64c 100644
+--- a/cartographer/mapping/internal/constraints/constraint_builder_2d.h
++++ b/cartographer/mapping/internal/constraints/constraint_builder_2d.h
+@@ -118,7 +118,7 @@ class ConstraintBuilder2D {
+   // accessed after 'creation_task_handle' has completed.
+   const SubmapScanMatcher* DispatchScanMatcherConstruction(
+       const SubmapId& submap_id, const Grid2D* grid)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Runs in a background thread and does computations for an additional
+   // constraint, assuming 'submap' and 'compressed_point_cloud' do not change
+@@ -129,9 +129,9 @@ class ConstraintBuilder2D {
+                          const transform::Rigid2d& initial_relative_pose,
+                          const SubmapScanMatcher& submap_scan_matcher,
+                          std::unique_ptr<Constraint>* constraint)
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+-  void RunWhenDoneCallback() LOCKS_EXCLUDED(mutex_);
++  void RunWhenDoneCallback() ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   const constraints::proto::ConstraintBuilderOptions options_;
+   common::ThreadPoolInterface* thread_pool_;
+@@ -139,34 +139,34 @@ class ConstraintBuilder2D {
+ 
+   // 'callback' set by WhenDone().
+   std::unique_ptr<std::function<void(const Result&)>> when_done_
+-      GUARDED_BY(mutex_);
++      ABSL_GUARDED_BY(mutex_);
+ 
+   // TODO(gaschler): Use atomics instead of mutex to access these counters.
+   // Number of the node in reaction to which computations are currently
+   // added. This is always the number of nodes seen so far, even when older
+   // nodes are matched against a new submap.
+-  int num_started_nodes_ GUARDED_BY(mutex_) = 0;
++  int num_started_nodes_ ABSL_GUARDED_BY(mutex_) = 0;
+ 
+-  int num_finished_nodes_ GUARDED_BY(mutex_) = 0;
++  int num_finished_nodes_ ABSL_GUARDED_BY(mutex_) = 0;
+ 
+-  std::unique_ptr<common::Task> finish_node_task_ GUARDED_BY(mutex_);
++  std::unique_ptr<common::Task> finish_node_task_ ABSL_GUARDED_BY(mutex_);
+ 
+-  std::unique_ptr<common::Task> when_done_task_ GUARDED_BY(mutex_);
++  std::unique_ptr<common::Task> when_done_task_ ABSL_GUARDED_BY(mutex_);
+ 
+   // Constraints currently being computed in the background. A deque is used to
+   // keep pointers valid when adding more entries. Constraint search results
+   // with below-threshold scores are also 'nullptr'.
+-  std::deque<std::unique_ptr<Constraint>> constraints_ GUARDED_BY(mutex_);
++  std::deque<std::unique_ptr<Constraint>> constraints_ ABSL_GUARDED_BY(mutex_);
+ 
+   // Map of dispatched or constructed scan matchers by 'submap_id'.
+   std::map<SubmapId, SubmapScanMatcher> submap_scan_matchers_
+-      GUARDED_BY(mutex_);
++      ABSL_GUARDED_BY(mutex_);
+   std::map<SubmapId, common::FixedRatioSampler> per_submap_sampler_;
+ 
+   scan_matching::CeresScanMatcher2D ceres_scan_matcher_;
+ 
+   // Histogram of scan matcher scores.
+-  common::Histogram score_histogram_ GUARDED_BY(mutex_);
++  common::Histogram score_histogram_ ABSL_GUARDED_BY(mutex_);
+ };
+ 
+ }  // namespace constraints
+diff --git a/cartographer/mapping/internal/constraints/constraint_builder_3d.cc b/cartographer/mapping/internal/constraints/constraint_builder_3d.cc
+index 87b3742..5b46179 100644
+--- a/cartographer/mapping/internal/constraints/constraint_builder_3d.cc
++++ b/cartographer/mapping/internal/constraints/constraint_builder_3d.cc
+@@ -102,7 +102,7 @@ void ConstraintBuilder3D::MaybeAddConstraint(
+   auto* const constraint = &constraints_.back();
+   const auto* scan_matcher = DispatchScanMatcherConstruction(submap_id, submap);
+   auto constraint_task = absl::make_unique<common::Task>();
+-  constraint_task->SetWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  constraint_task->SetWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     ComputeConstraint(submap_id, node_id, false, /* match_full_submap */
+                       constant_data, global_node_pose, global_submap_pose,
+                       *scan_matcher, constraint);
+@@ -128,7 +128,7 @@ void ConstraintBuilder3D::MaybeAddGlobalConstraint(
+   auto* const constraint = &constraints_.back();
+   const auto* scan_matcher = DispatchScanMatcherConstruction(submap_id, submap);
+   auto constraint_task = absl::make_unique<common::Task>();
+-  constraint_task->SetWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
++  constraint_task->SetWorkItem([=]() ABSL_LOCKS_EXCLUDED(mutex_) {
+     ComputeConstraint(submap_id, node_id, true, /* match_full_submap */
+                       constant_data,
+                       transform::Rigid3d::Rotation(global_node_rotation),
+diff --git a/cartographer/mapping/internal/constraints/constraint_builder_3d.h b/cartographer/mapping/internal/constraints/constraint_builder_3d.h
+index 247a9da..8005ccc 100644
+--- a/cartographer/mapping/internal/constraints/constraint_builder_3d.h
++++ b/cartographer/mapping/internal/constraints/constraint_builder_3d.h
+@@ -126,7 +126,7 @@ class ConstraintBuilder3D {
+   // accessed after 'creation_task_handle' has completed.
+   const SubmapScanMatcher* DispatchScanMatcherConstruction(
+       const SubmapId& submap_id, const Submap3D* submap)
+-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
++      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ 
+   // Runs in a background thread and does computations for an additional
+   // constraint.
+@@ -138,9 +138,9 @@ class ConstraintBuilder3D {
+                          const transform::Rigid3d& global_submap_pose,
+                          const SubmapScanMatcher& submap_scan_matcher,
+                          std::unique_ptr<Constraint>* constraint)
+-      LOCKS_EXCLUDED(mutex_);
++      ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+-  void RunWhenDoneCallback() LOCKS_EXCLUDED(mutex_);
++  void RunWhenDoneCallback() ABSL_LOCKS_EXCLUDED(mutex_);
+ 
+   const proto::ConstraintBuilderOptions options_;
+   common::ThreadPoolInterface* thread_pool_;
+@@ -148,36 +148,36 @@ class ConstraintBuilder3D {
+ 
+   // 'callback' set by WhenDone().
+   std::unique_ptr<std::function<void(const Result&)>> when_done_
+-      GUARDED_BY(mutex_);
++      ABSL_GUARDED_BY(mutex_);
+ 
+   // TODO(gaschler): Use atomics instead of mutex to access these counters.
+   // Number of the node in reaction to which computations are currently
+   // added. This is always the number of nodes seen so far, even when older
+   // nodes are matched against a new submap.
+-  int num_started_nodes_ GUARDED_BY(mutex_) = 0;
++  int num_started_nodes_ ABSL_GUARDED_BY(mutex_) = 0;
+ 
+-  int num_finished_nodes_ GUARDED_BY(mutex_) = 0;
++  int num_finished_nodes_ ABSL_GUARDED_BY(mutex_) = 0;
+ 
+-  std::unique_ptr<common::Task> finish_node_task_ GUARDED_BY(mutex_);
++  std::unique_ptr<common::Task> finish_node_task_ ABSL_GUARDED_BY(mutex_);
+ 
+-  std::unique_ptr<common::Task> when_done_task_ GUARDED_BY(mutex_);
++  std::unique_ptr<common::Task> when_done_task_ ABSL_GUARDED_BY(mutex_);
+ 
+   // Constraints currently being computed in the background. A deque is used to
+   // keep pointers valid when adding more entries. Constraint search results
+   // with below-threshold scores are also 'nullptr'.
+-  std::deque<std::unique_ptr<Constraint>> constraints_ GUARDED_BY(mutex_);
++  std::deque<std::unique_ptr<Constraint>> constraints_ ABSL_GUARDED_BY(mutex_);
+ 
+   // Map of dispatched or constructed scan matchers by 'submap_id'.
+   std::map<SubmapId, SubmapScanMatcher> submap_scan_matchers_
+-      GUARDED_BY(mutex_);
++      ABSL_GUARDED_BY(mutex_);
+   std::map<SubmapId, common::FixedRatioSampler> per_submap_sampler_;
+ 
+   scan_matching::CeresScanMatcher3D ceres_scan_matcher_;
+ 
+   // Histograms of scan matcher scores.
+-  common::Histogram score_histogram_ GUARDED_BY(mutex_);
+-  common::Histogram rotational_score_histogram_ GUARDED_BY(mutex_);
+-  common::Histogram low_resolution_score_histogram_ GUARDED_BY(mutex_);
++  common::Histogram score_histogram_ ABSL_GUARDED_BY(mutex_);
++  common::Histogram rotational_score_histogram_ ABSL_GUARDED_BY(mutex_);
++  common::Histogram low_resolution_score_histogram_ ABSL_GUARDED_BY(mutex_);
+ };
+ 
+ }  // namespace constraints
+diff --git a/cartographer/mapping/internal/eigen_quaterniond_from_two_vectors.h b/cartographer/mapping/internal/eigen_quaterniond_from_two_vectors.h
+index 294f45e..e8d04b3 100644
+--- a/cartographer/mapping/internal/eigen_quaterniond_from_two_vectors.h
++++ b/cartographer/mapping/internal/eigen_quaterniond_from_two_vectors.h
+@@ -17,18 +17,7 @@
+ #ifndef CARTOGRAPHER_MAPPING_EIGEN_QUATERNIOND_FROM_TWO_VECTORS_H_
+ #define CARTOGRAPHER_MAPPING_EIGEN_QUATERNIOND_FROM_TWO_VECTORS_H_
+ 
+-// When using Eigen 3.4.0 on Ubuntu 24.04 on an x86_64 machine and
+-// compiling with -O3 -NDEBUG, we get a warning that an SSE function
+-// deep within Eigen might be used uninitialized.  This seems like
+-// a spurious warning, so just ignore it for now.
+-#ifdef __linux__
+-#pragma GCC diagnostic push
+-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+-#endif
+ #include "Eigen/Geometry"
+-#ifdef __linux__
+-#pragma GCC diagnostic pop
+-#endif
+ 
+ namespace cartographer {
+ namespace mapping {
+diff --git a/cartographer/mapping/internal/imu_based_pose_extrapolator.cc b/cartographer/mapping/internal/imu_based_pose_extrapolator.cc
+index 4e0a950..453c215 100644
+--- a/cartographer/mapping/internal/imu_based_pose_extrapolator.cc
++++ b/cartographer/mapping/internal/imu_based_pose_extrapolator.cc
+@@ -28,9 +28,6 @@
+ #include "cartographer/mapping/internal/optimization/cost_functions/spa_cost_function_3d.h"
+ #include "cartographer/mapping/pose_graph_interface.h"
+ #include "cartographer/transform/transform.h"
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-#include "ceres/manifold.h"
+-#endif
+ #include "glog/logging.h"
+ 
+ namespace cartographer {
+@@ -138,16 +135,9 @@ ImuBasedPoseExtrapolator::ExtrapolatePosesWithGravity(
+ 
+   // Track gravity alignment over time and use this as a frame here so that
+   // we can estimate the gravity alignment of the current pose.
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+   optimization::CeresPose gravity_from_local(
+       gravity_from_local_, nullptr,
+       absl::make_unique<ceres::QuaternionManifold>(), &problem);
+-#else
+-  optimization::CeresPose gravity_from_local(
+-      gravity_from_local_, nullptr,
+-      absl::make_unique<ceres::QuaternionParameterization>(), &problem);
+-#endif
+-
+   // Use deque so addresses stay constant during problem formulation.
+   std::deque<optimization::CeresPose> nodes;
+   std::vector<common::Time> node_times;
+@@ -170,10 +160,10 @@ ImuBasedPoseExtrapolator::ExtrapolatePosesWithGravity(
+       gravity_from_node = gravity_from_local_ * timed_pose.transform;
+     }
+ 
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+     if (is_last) {
+       nodes.emplace_back(gravity_from_node, nullptr,
+-                         absl::make_unique<ceres::AutoDiffManifold<ConstantYawQuaternionOperations, 4, 2>>(),
++                         absl::make_unique<ceres::AutoDiffManifold<
++                             ConstantYawQuaternionFunctor, 4, 2>>(),
+                          &problem);
+       problem.SetParameterBlockConstant(nodes.back().translation());
+     } else {
+@@ -181,19 +171,6 @@ ImuBasedPoseExtrapolator::ExtrapolatePosesWithGravity(
+                          absl::make_unique<ceres::QuaternionManifold>(),
+                          &problem);
+     }
+-#else
+-    if (is_last) {
+-      nodes.emplace_back(gravity_from_node, nullptr,
+-                         absl::make_unique<ceres::AutoDiffLocalParameterization<
+-                             ConstantYawQuaternionPlus, 4, 2>>(),
+-                         &problem);
+-      problem.SetParameterBlockConstant(nodes.back().translation());
+-    } else {
+-      nodes.emplace_back(gravity_from_node, nullptr,
+-                         absl::make_unique<ceres::QuaternionParameterization>(),
+-                         &problem);
+-    }
+-#endif
+   }
+ 
+   double gravity_constant = 9.8;
+@@ -222,15 +199,9 @@ ImuBasedPoseExtrapolator::ExtrapolatePosesWithGravity(
+           gravity_constant * Eigen::Vector3d::UnitZ(), time, imu_data_,
+           &imu_it_prev_prev)
+           .pose;
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+   nodes.emplace_back(initial_estimate, nullptr,
+                      absl::make_unique<ceres::QuaternionManifold>(),
+                      &problem);
+-#else
+-  nodes.emplace_back(initial_estimate, nullptr,
+-                     absl::make_unique<ceres::QuaternionParameterization>(),
+-                     &problem);
+-#endif
+   node_times.push_back(time);
+ 
+   // Add cost functions for node constraints.
+@@ -251,13 +222,8 @@ ImuBasedPoseExtrapolator::ExtrapolatePosesWithGravity(
+ 
+   std::array<double, 4> imu_calibration{{1., 0., 0., 0.}};
+ 
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+   problem.AddParameterBlock(imu_calibration.data(), 4,
+                             new ceres::QuaternionManifold());
+-#else
+-  problem.AddParameterBlock(imu_calibration.data(), 4,
+-                            new ceres::QuaternionParameterization());
+-#endif
+   problem.SetParameterBlockConstant(imu_calibration.data());
+ 
+   auto imu_it = imu_data_.begin();
+diff --git a/cartographer/mapping/internal/optimization/ceres_pose.cc b/cartographer/mapping/internal/optimization/ceres_pose.cc
+index f15b427..e8ca461 100644
+--- a/cartographer/mapping/internal/optimization/ceres_pose.cc
++++ b/cartographer/mapping/internal/optimization/ceres_pose.cc
+@@ -27,23 +27,10 @@ CeresPose::Data FromPose(const transform::Rigid3d& pose) {
+                            pose.rotation().y(), pose.rotation().z()}}};
+ }
+ 
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+ CeresPose::CeresPose(
+     const transform::Rigid3d& pose,
+-    std::unique_ptr<ceres::Manifold> translation_manifold,
+-    std::unique_ptr<ceres::Manifold> rotation_manifold,
+-    ceres::Problem* problem)
+-    : data_(std::make_shared<CeresPose::Data>(FromPose(pose))) {
+-  problem->AddParameterBlock(data_->translation.data(), 3,
+-                             translation_manifold.release());
+-  problem->AddParameterBlock(data_->rotation.data(), 4,
+-                             rotation_manifold.release());
+-}
+-#else
+-CeresPose::CeresPose(
+-    const transform::Rigid3d& pose,
+-    std::unique_ptr<ceres::LocalParameterization> translation_parametrization,
+-    std::unique_ptr<ceres::LocalParameterization> rotation_parametrization,
++    std::unique_ptr<ceres::Manifold> translation_parametrization,
++    std::unique_ptr<ceres::Manifold> rotation_parametrization,
+     ceres::Problem* problem)
+     : data_(std::make_shared<CeresPose::Data>(FromPose(pose))) {
+   problem->AddParameterBlock(data_->translation.data(), 3,
+@@ -51,7 +38,6 @@ CeresPose::CeresPose(
+   problem->AddParameterBlock(data_->rotation.data(), 4,
+                              rotation_parametrization.release());
+ }
+-#endif
+ 
+ const transform::Rigid3d CeresPose::ToRigid() const {
+   return transform::Rigid3d::FromArrays(data_->rotation, data_->translation);
+diff --git a/cartographer/mapping/internal/optimization/ceres_pose.h b/cartographer/mapping/internal/optimization/ceres_pose.h
+index e4c7b05..9cf4429 100644
+--- a/cartographer/mapping/internal/optimization/ceres_pose.h
++++ b/cartographer/mapping/internal/optimization/ceres_pose.h
+@@ -23,9 +23,6 @@
+ #include "Eigen/Core"
+ #include "cartographer/transform/rigid_transform.h"
+ #include "ceres/ceres.h"
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-#include "ceres/manifold.h"
+-#endif
+ 
+ namespace cartographer {
+ namespace mapping {
+@@ -33,19 +30,11 @@ namespace optimization {
+ 
+ class CeresPose {
+  public:
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-  CeresPose(
+-      const transform::Rigid3d& pose,
+-      std::unique_ptr<ceres::Manifold> translation_manifold,
+-      std::unique_ptr<ceres::Manifold> rotation_manifold,
+-      ceres::Problem* problem);
+-#else
+   CeresPose(
+       const transform::Rigid3d& rigid,
+-      std::unique_ptr<ceres::LocalParameterization> translation_parametrization,
+-      std::unique_ptr<ceres::LocalParameterization> rotation_parametrization,
++      std::unique_ptr<ceres::Manifold> translation_parametrization,
++      std::unique_ptr<ceres::Manifold> rotation_parametrization,
+       ceres::Problem* problem);
+-#endif
+ 
+   const transform::Rigid3d ToRigid() const;
+ 
+diff --git a/cartographer/mapping/internal/optimization/optimization_problem_2d.cc b/cartographer/mapping/internal/optimization/optimization_problem_2d.cc
+index 64b3c2c..78f3539 100644
+--- a/cartographer/mapping/internal/optimization/optimization_problem_2d.cc
++++ b/cartographer/mapping/internal/optimization/optimization_problem_2d.cc
+@@ -142,19 +142,11 @@ void AddLandmarkCostFunctions(
+                 ? landmark_node.second.global_landmark_pose.value()
+                 : GetInitialLandmarkPose(observation, prev->data, next->data,
+                                          *prev_node_pose, *next_node_pose);
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-        C_landmarks->emplace(
+-            landmark_id,
+-            CeresPose(starting_point, nullptr /* translation_manifold */,
+-                      absl::make_unique<ceres::QuaternionManifold>(),
+-                      problem));
+-#else
+         C_landmarks->emplace(
+             landmark_id,
+             CeresPose(starting_point, nullptr /* translation_parametrization */,
+-                      absl::make_unique<ceres::QuaternionParameterization>(),
++                      absl::make_unique<ceres::QuaternionManifold>(),
+                       problem));
+-#endif
+         // Set landmark constant if it is frozen.
+         if (landmark_node.second.frozen) {
+           problem->SetParameterBlockConstant(
+diff --git a/cartographer/mapping/internal/optimization/optimization_problem_3d.cc b/cartographer/mapping/internal/optimization/optimization_problem_3d.cc
+index e1d6bd3..717d253 100644
+--- a/cartographer/mapping/internal/optimization/optimization_problem_3d.cc
++++ b/cartographer/mapping/internal/optimization/optimization_problem_3d.cc
+@@ -158,19 +158,11 @@ void AddLandmarkCostFunctions(
+                 ? landmark_node.second.global_landmark_pose.value()
+                 : GetInitialLandmarkPose(observation, prev->data, next->data,
+                                          *prev_node_pose, *next_node_pose);
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-        C_landmarks->emplace(
+-            landmark_id,
+-            CeresPose(starting_point, nullptr /* translation_manifold */,
+-                      absl::make_unique<ceres::QuaternionManifold>(),
+-                      problem));
+-#else
+         C_landmarks->emplace(
+             landmark_id,
+             CeresPose(starting_point, nullptr /* translation_parametrization */,
+-                      absl::make_unique<ceres::QuaternionParameterization>(),
++                      absl::make_unique<ceres::QuaternionManifold>(),
+                       problem));
+-#endif
+         // Set landmark constant if it is frozen.
+         if (landmark_node.second.frozen) {
+           problem->SetParameterBlockConstant(
+@@ -282,22 +274,13 @@ void OptimizationProblem3D::Solve(
+   ceres::Problem::Options problem_options;
+   ceres::Problem problem(problem_options);
+ 
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-  const auto translation_manifold =
+-      [this]() -> std::unique_ptr<ceres::Manifold> {
+-    return options_.fix_z_in_3d() ? absl::make_unique<ceres::SubsetManifold>(
+-                                        3, std::vector<int>{2})
+-                                  : nullptr;
+-  };
+-#else
+   const auto translation_parameterization =
+-      [this]() -> std::unique_ptr<ceres::LocalParameterization> {
++      [this]() -> std::unique_ptr<ceres::Manifold> {
+     return options_.fix_z_in_3d()
+-               ? absl::make_unique<ceres::SubsetParameterization>(
++               ? absl::make_unique<ceres::SubsetManifold>(
+                      3, std::vector<int>{2})
+                : nullptr;
+   };
+-#endif
+ 
+   // Set the starting point.
+   CHECK(!submap_data_.empty());
+@@ -312,40 +295,22 @@ void OptimizationProblem3D::Solve(
+       first_submap = false;
+       // Fix the first submap of the first trajectory except for allowing
+       // gravity alignment.
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-      C_submaps.Insert(
+-          submap_id_data.id,
+-          CeresPose(submap_id_data.data.global_pose,
+-                    translation_manifold(),
+-                    absl::make_unique<ceres::AutoDiffManifold<ConstantYawQuaternionOperations, 4, 2>>(),
+-                    &problem));
+-#else
+       C_submaps.Insert(
+           submap_id_data.id,
+           CeresPose(submap_id_data.data.global_pose,
+                     translation_parameterization(),
+-                    absl::make_unique<ceres::AutoDiffLocalParameterization<
+-                        ConstantYawQuaternionPlus, 4, 2>>(),
++                    absl::make_unique<ceres::AutoDiffManifold<
++                        ConstantYawQuaternionFunctor, 4, 2>>(),
+                     &problem));
+-#endif
+       problem.SetParameterBlockConstant(
+           C_submaps.at(submap_id_data.id).translation());
+     } else {
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-      C_submaps.Insert(
+-          submap_id_data.id,
+-          CeresPose(submap_id_data.data.global_pose,
+-                    translation_manifold(),
+-                    absl::make_unique<ceres::QuaternionManifold>(),
+-                    &problem));
+-#else
+       C_submaps.Insert(
+           submap_id_data.id,
+           CeresPose(submap_id_data.data.global_pose,
+                     translation_parameterization(),
+-                    absl::make_unique<ceres::QuaternionParameterization>(),
++                    absl::make_unique<ceres::QuaternionManifold>(),
+                     &problem));
+-#endif
+     }
+     if (frozen) {
+       problem.SetParameterBlockConstant(
+@@ -357,19 +322,11 @@ void OptimizationProblem3D::Solve(
+   for (const auto& node_id_data : node_data_) {
+     const bool frozen =
+         frozen_trajectories.count(node_id_data.id.trajectory_id) != 0;
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-    C_nodes.Insert(
+-        node_id_data.id,
+-        CeresPose(node_id_data.data.global_pose, translation_manifold(),
+-                  absl::make_unique<ceres::QuaternionManifold>(),
+-                  &problem));
+-#else
+     C_nodes.Insert(
+         node_id_data.id,
+         CeresPose(node_id_data.data.global_pose, translation_parameterization(),
+-                  absl::make_unique<ceres::QuaternionParameterization>(),
++                  absl::make_unique<ceres::QuaternionManifold>(),
+                   &problem));
+-#endif
+     if (frozen) {
+       problem.SetParameterBlockConstant(C_nodes.at(node_id_data.id).rotation());
+       problem.SetParameterBlockConstant(
+@@ -405,13 +362,8 @@ void OptimizationProblem3D::Solve(
+       }
+       TrajectoryData& trajectory_data = trajectory_data_.at(trajectory_id);
+ 
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+       problem.AddParameterBlock(trajectory_data.imu_calibration.data(), 4,
+                                 new ceres::QuaternionManifold());
+-#else
+-      problem.AddParameterBlock(trajectory_data.imu_calibration.data(), 4,
+-                                new ceres::QuaternionParameterization());
+-#endif
+       if (!options_.use_online_imu_extrinsics_in_3d()) {
+         problem.SetParameterBlockConstant(
+             trajectory_data.imu_calibration.data());
+@@ -584,18 +536,6 @@ void OptimizationProblem3D::Solve(
+           fixed_frame_pose_in_map =
+               node_data.global_pose * constraint_pose.zbar_ij.inverse();
+         }
+-#if CERES_VERSION_MAJOR > 2 || CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 1
+-        C_fixed_frames.emplace(
+-            std::piecewise_construct, std::forward_as_tuple(trajectory_id),
+-            std::forward_as_tuple(
+-                transform::Rigid3d(
+-                    fixed_frame_pose_in_map.translation(),
+-                    Eigen::AngleAxisd(
+-                        transform::GetYaw(fixed_frame_pose_in_map.rotation()),
+-                        Eigen::Vector3d::UnitZ())),
+-                nullptr, absl::make_unique<ceres::AutoDiffManifold<YawOnlyQuaternionOperations, 4, 1>>(),
+-                &problem));
+-#else
+         C_fixed_frames.emplace(
+             std::piecewise_construct, std::forward_as_tuple(trajectory_id),
+             std::forward_as_tuple(
+@@ -605,10 +545,9 @@ void OptimizationProblem3D::Solve(
+                         transform::GetYaw(fixed_frame_pose_in_map.rotation()),
+                         Eigen::Vector3d::UnitZ())),
+                 nullptr,
+-                absl::make_unique<ceres::AutoDiffLocalParameterization<
+-                    YawOnlyQuaternionPlus, 4, 1>>(),
++                absl::make_unique<ceres::AutoDiffManifold<
++                    YawOnlyQuaternionFunctor, 4, 1>>(),
+                 &problem));
+-#endif
+         fixed_frame_pose_initialized = true;
+       }
+ 
+diff --git a/cartographer/mapping/internal/range_data_collator_test.cc b/cartographer/mapping/internal/range_data_collator_test.cc
+index dce7717..43ceb00 100644
+--- a/cartographer/mapping/internal/range_data_collator_test.cc
++++ b/cartographer/mapping/internal/range_data_collator_test.cc
+@@ -92,7 +92,7 @@ TEST(RangeDataCollatorTest, SingleSensorEmptyData) {
+   const std::string sensor_id = "single_sensor";
+   RangeDataCollator collator({sensor_id});
+   sensor::TimedPointCloudData empty_data{
+-      common::FromUniversal(300), Eigen::Vector3f::Zero(), {}, {}};
++      common::FromUniversal(300), {}, {}, {}};
+   auto output_0 = collator.AddRangeData(sensor_id, empty_data);
+   EXPECT_EQ(output_0.time, empty_data.time);
+   EXPECT_EQ(output_0.ranges.size(), empty_data.ranges.size());
+diff --git a/cartographer/sensor/internal/test_helpers.h b/cartographer/sensor/internal/test_helpers.h
+index 431758f..0b32d89 100644
+--- a/cartographer/sensor/internal/test_helpers.h
++++ b/cartographer/sensor/internal/test_helpers.h
+@@ -47,7 +47,7 @@ struct CollatorInput {
+                                      const std::string& sensor_id, int time) {
+     return CollatorInput{
+         trajectory_id,
+-        MakeDispatchable(sensor_id, ImuData{common::FromUniversal(time), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()}),
++        MakeDispatchable(sensor_id, ImuData{common::FromUniversal(time)}),
+         CollatorOutput{trajectory_id, sensor_id, common::FromUniversal(time)}};
+   }
+   static CollatorInput CreateTimedPointCloudData(int trajectory_id,
+diff --git a/package.xml b/package.xml
+index 65b86a6..ac3963f 100644
+--- a/package.xml
++++ b/package.xml
+@@ -38,7 +38,7 @@
+   2.0.9020 -> upstream 2.0.2
+   and so on...
+   -->
+-  <version>2.0.9003</version>
++  <version>2.0.9002</version>
+   <description>
+     Cartographer is a system that provides real-time simultaneous localization
+     and mapping (SLAM) in 2D and 3D across multiple platforms and sensor
+diff --git a/scripts/build_test_asan.sh b/scripts/build_test_asan.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_abseil.sh b/scripts/install_abseil.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_async_grpc.sh b/scripts/install_async_grpc.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_cartographer_bazel.sh b/scripts/install_cartographer_bazel.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_cartographer_cmake.sh b/scripts/install_cartographer_cmake.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_cartographer_cmake_with_grpc.sh b/scripts/install_cartographer_cmake_with_grpc.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_ceres.sh b/scripts/install_ceres.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_debs_bazel.sh b/scripts/install_debs_bazel.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_debs_cmake.sh b/scripts/install_debs_cmake.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_grpc.sh b/scripts/install_grpc.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_prometheus_cpp.sh b/scripts/install_prometheus_cpp.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/install_proto3.sh b/scripts/install_proto3.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/load_docker_cache.sh b/scripts/load_docker_cache.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/save_docker_cache.sh b/scripts/save_docker_cache.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/update_configuration_doc.py b/scripts/update_configuration_doc.py
+old mode 100755
+new mode 100644
