@@ -8,3 +8,7 @@
 
 ## Overview
 For details, please see https://www.renesas.com/software-tool/rzv2h-ros2-package.
+
+### Note
+As of April 24, 2026, the repository will be migrated to [rzv_ros](https://github.com/renesas-rz/rzv_ros). 
+This repository will no longer be updated after that date and will be removed in the future.
